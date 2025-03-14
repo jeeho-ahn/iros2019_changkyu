@@ -13,12 +13,14 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/function.hpp>
 #include <boost/graph/labeled_graph.hpp>
+#include <boost/bind.hpp>
 
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/datastructures/NearestNeighbors.h>
 #include <ompl/geometric/PathGeometric.h>
+#include <ompl/geometric/planners/rrt/RRT.h>
 
 #include "statespace.hpp"
 #include "bullet_simulation/collision_simulation.hpp"
@@ -119,7 +121,11 @@ public:
             si_->setStateValidityChecker(boost::bind(&MDP::isValid, this, _1));
 
             // nearest neighbors
-            nn_.reset(ompl::tools::SelfConfig::getDefaultNearestNeighbors<Vertex*>(si_->getStateSpace()));
+            //nn_.reset(ompl::tools::SelfConfig::getDefaultNearestNeighbors<Vertex*>(si_->getStateSpace()));
+            //nn_.reset(ompl::tools::SelfConfig::getDefaultNearestNeighbors<Vertex *>(si_->getStateSpace().get()));
+            ompl::base::PlannerPtr dummyPlanner(new ompl::geometric::RRT(si_));
+            nn_.reset(ompl::tools::SelfConfig::getDefaultNearestNeighbors<Vertex *>(dummyPlanner.get()));
+
             nn_->setDistanceFunction(boost::bind(&MDP::distanceFunction, this, _1, _2));
 
             is_setup = true;

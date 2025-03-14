@@ -8,8 +8,11 @@ set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 find_package(Bullet REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
-find_package(OMPL REQUIRED)
+find_package(ompl REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+roscpp
+  shape_msgs)
 
 set(Boost_LIBRARIES boost_program_options boost_system boost_filesystem boost_log)
 
@@ -22,6 +25,7 @@ include_directories(
   bullet/ThirdPartyLibs/Glew
   ${BULLET_INCLUDE_DIRS}
   ${OMPL_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
 )
 
 ADD_DEFINITIONS(-DGLEW_STATIC)
@@ -96,6 +100,7 @@ target_link_libraries(${PROJECT_NAME}
   ${OpenCV_LIBRARIES}
   bullet_simulation  
   pthread
+  ${catkin_LIBRARIES}
 )
 
 target_link_libraries(run_expr
