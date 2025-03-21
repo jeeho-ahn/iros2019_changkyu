@@ -364,9 +364,14 @@ int main(int argc, char* argv[])
 
             if( vis )
             {
-                cv::Mat img = cv::Mat::zeros(1000,1000,CV_8UC3);
+                cv::Mat img;
+                if(name_experiment.compare("relopush")==0)
+                    img = cv::Mat::zeros(500,400,CV_8UC3); // jeeho: relopush setup
+                else
+                    img =cv::Mat::zeros(1000,1000,CV_8UC3);
+
                 env->visualizeSetup(img);
-                planner.visualizePath(img,path);
+                planner.visualizePath(img,path,(name_experiment.compare("relopush")==0));
                 cv::imshow("vis",img);
                 cv::waitKey();
             }

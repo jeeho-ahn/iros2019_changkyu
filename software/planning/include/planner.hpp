@@ -113,7 +113,7 @@ public:
                            const ompl::geometric::PathGeometric &path,
                            const std::vector<Action> &actions          );
 
-    void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path);
+    void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path, bool is_relopush = false);
     void visualizeState(cv::Mat& img, const ompl::base::State* state);
 
     void test();    

@@ -2850,34 +2850,69 @@ void Planner::splitPath( const og::PathGeometric &path,
     idxes_startend.push_back(make_pair(idx_start,idx_end));
 }
 
-void Planner::visualizePath(cv::Mat& img, const og::PathGeometric &path)
+void Planner::visualizePath(cv::Mat& img, const og::PathGeometric &path, bool is_relopush)
 {
-    for( int p=0; p<path.getStateCount(); p++ )
+    if(!is_relopush)
     {
-        double alpha = 0.5 + 0.5*((p+1)/(double)path.getStateCount());
-        const ompl::base::State* state = path.getState(p);
-        for( int q=1; q<=n_objs_; q++ )
+        for( int p=0; p<path.getStateCount(); p++ )
         {
-            cv::Scalar color = cv::Scalar(colors_.at<cv::Vec3b>(q-1,0)[2],
-                                          colors_.at<cv::Vec3b>(q-1,0)[1],
-                                          colors_.at<cv::Vec3b>(q-1,0)[0]);
-
-            const ObjectState* state_obj = STATE_OBJECT(state,q);
-            drawSoap( img,state_obj->getX(), state_obj->getY(), state_obj->getYaw(),
-                      color, alpha, p==0 || p==path.getStateCount()-1 );
-
-            if( p>0 )
+            double alpha = 0.5 + 0.5*((p+1)/(double)path.getStateCount());
+            const ompl::base::State* state = path.getState(p);
+            for( int q=1; q<=n_objs_; q++ )
             {
-                const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1),q);
+                cv::Scalar color = cv::Scalar(colors_.at<cv::Vec3b>(q-1,0)[2],
+                                              colors_.at<cv::Vec3b>(q-1,0)[1],
+                                              colors_.at<cv::Vec3b>(q-1,0)[0]);
 
-                int x1 = 500-state_prv->getY()*500;
-                int y1 = 500-state_prv->getX()*500;
+                const ObjectState* state_obj = STATE_OBJECT(state,q);
+                drawSoap( img,state_obj->getX(), state_obj->getY(), state_obj->getYaw(),
+                          color, alpha, p==0 || p==path.getStateCount()-1 );
 
-                int x2 = 500-state_obj->getY()*500;
-                int y2 = 500-state_obj->getX()*500;
-                line(img, cv::Point(x1,y1), cv::Point(x2,y2), color );
+                if( p>0 )
+                {
+                    const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1),q);
+
+                    int x1 = 500-state_prv->getY()*500;
+                    int y1 = 500-state_prv->getX()*500;
+
+                    int x2 = 500-state_obj->getY()*500;
+                    int y2 = 500-state_obj->getX()*500;
+                    line(img, cv::Point(x1,y1), cv::Point(x2,y2), color );
+                }
             }
         }
+    }
+    else
+    {
+        for( int p=0; p<path.getStateCount(); p++ )
+        {
+            double alpha = 0.5 + 0.5*((p+1)/(double)path.getStateCount());
+            const ompl::base::State* state = path.getState(p);
+            for( int q=1; q<=n_objs_; q++ )
+            {
+                cv::Scalar color = cv::Scalar(colors_.at<cv::Vec3b>(q-1,0)[2],
+                                              colors_.at<cv::Vec3b>(q-1,0)[1],
+                                              colors_.at<cv::Vec3b>(q-1,0)[0]);
+
+                const ObjectState* state_obj = STATE_OBJECT(state,q);
+                drawSoap( img,state_obj->getX(), state_obj->getY(), state_obj->getYaw(),
+                          color, alpha, p==0 || p==path.getStateCount()-1 );
+
+                if( p > 0 )
+                {
+                    const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1), q);
+
+                    int x1 = static_cast<int>((state_prv->getX() / 6.0) * 400);
+                    int y1 = static_cast<int>(500 - ((state_prv->getY() / 6.0) * 500));
+
+                    int x2 = static_cast<int>((state_obj->getX() / 6.0) * 400);
+                    int y2 = static_cast<int>(500 - ((state_obj->getY() / 6.0) * 500));
+
+                    line(img, cv::Point(x1, y1), cv::Point(x2, y2), color);
+                }
+            }
+        }
+
     }
 }
 

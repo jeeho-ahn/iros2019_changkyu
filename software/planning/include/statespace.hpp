@@ -908,14 +908,25 @@ public:
         }
         else
         {
-            cv::line(img,cv::Point(500-500*minx_,500-500*miny_),
-                         cv::Point(500-500*minx_,500-500* maxy_), cv::Scalar(0,255,0) );
-            cv::line(img,cv::Point(500-500*minx_,500-500* maxy_),
-                         cv::Point(500-500* maxx_,500-500* maxy_), cv::Scalar(0,255,0) );
-            cv::line(img,cv::Point(500-500* maxx_,500-500* maxy_),
-                         cv::Point(500-500* maxx_,500-500*miny_), cv::Scalar(0,255,0) );
-            cv::line(img,cv::Point(500-500* maxx_,500-500*miny_),
-                         cv::Point(500-500*minx_,500-500*miny_), cv::Scalar(0,255,0) );
+            cv::line(img,
+                     cv::Point((minx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Point((minx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Scalar(0, 255, 0));
+
+            cv::line(img,
+                     cv::Point((minx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Point((maxx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Scalar(0, 255, 0));
+
+            cv::line(img,
+                     cv::Point((maxx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Point((maxx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Scalar(0, 255, 0));
+
+            cv::line(img,
+                     cv::Point((maxx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Point((minx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Scalar(0, 255, 0));
         }
     }
 
