@@ -8,7 +8,8 @@
 #include <boost/log/trivial.hpp>
 #define LOG BOOST_LOG_TRIVIAL(trace)
 
-#include "planner.hpp"
+#include "../include/planner.hpp"
+#include <config.h>
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
@@ -16,6 +17,8 @@ namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
 using namespace std;
+
+const std::string cmake_dir = std::string(CMAKE_SOURCE_DIR);
 
 int main(int argc, char* argv[])
 {
@@ -28,6 +31,8 @@ int main(int argc, char* argv[])
     vector<int> ns;
     vector<int> ks{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
 
+///////////////
+/*
     po::options_description desc("Example Usage");
     desc.add_options()
         ("help", "help")
@@ -40,8 +45,15 @@ int main(int argc, char* argv[])
         ("expr,e", po::value<string>(&name_experiment)->default_value("tabletop_kuka"), 
                    "the name of experiment [openspace_sim, tabletop_kuka, redbox_kuka, amazonbox_kuka]")
         ("planner,p", po::value<string>(&name_planner)->default_value("ours"), 
-                   "the name of planner [ours, plrs, mopl]")
-    ;
+                   "the name of planner [ours, plrs, mopl]");
+
+
+
+    //const char* args[] = {"reloPush", "-i", "0", "-k", "1", "-v", "true", "-n", "2", "-e", "amazonbox_kuka", "-p", "plrs"};
+    //argv = const_cast<char**>(args);
+    //argc = 5;
+
+
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -50,8 +62,19 @@ int main(int argc, char* argv[])
         cout << desc << endl;
         return 0;
     }
+    */
+    /////////////////
 
-    string dp_root = "/home/cs1080/projects/ijcai2019/software/planning/";
+    id = 0;
+    name_experiment = "relopush";
+    name_planner = "ours_selfish";
+    vis = true;
+    skip = false;
+    ns = {1}; // num of object
+    ks = {1};
+
+    //string dp_root = "/home/jeeho/cpp_ws/iros2019_changkyu/software/planning";
+    string dp_root = cmake_dir;
 
     if( name_planner.compare("ours_selfish")==0 )
     {
@@ -77,9 +100,10 @@ int main(int argc, char* argv[])
         for( int j=0; j<ns.size(); j++ )
         {
             int n = ns[j];            
-            string name = "ours";
+            string name = "ours"; // jeeho: ??
 
             int n_objs = n;
+            //// jeeho: Object shape defined here
             vector<RobotObjectSetup::Object> objects(n_objs);
             for( int o=0; o<n_objs; o++ )
             {
@@ -101,6 +125,10 @@ int main(int argc, char* argv[])
             if( name_experiment.compare("openspace_sim")==0 )
             {
                 env = new BoxSetup(objects,2.10);
+            }
+            else if( name_experiment.compare("relopush")==0 ) // jeeho: setup for relopush
+            {
+                env = new BoxSetup(objects,0,4,0,5.2);
             }
             else if( name_experiment.compare("tabletop_kuka")==0 )
             {
@@ -137,9 +165,20 @@ int main(int argc, char* argv[])
                 return 0;
             }
 
-            char fp_init[256], fp_goal[256], fp_res[256];
+            //char fp_init[256], fp_goal[256], fp_res[256];
+
+            std::string fp_init, fp_goal;
+            char fp_res[256];
+
+            /*
             sprintf(fp_init,"%s/input/%s/%s.n%d.%03d.init",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, i);
             sprintf(fp_goal,"%s/input/%s/%s.n%d.%03d.goal",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, 1);
+            sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
+            */
+            // manual file name
+
+            fp_init = dp_root + "/input/relopush/input_1obj.init";
+            fp_goal = dp_root + "/input/relopush/output_1obj.goal";
             sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
 
             fs::path path_res(fp_res);
@@ -159,10 +198,11 @@ int main(int argc, char* argv[])
             YAML::Node node_init = YAML::LoadFile(fp_init);
             YAML::Node node_goal = YAML::LoadFile(fp_goal);
 
-            STATE_ROBOT(state_init) = -1;
-            STATE_ROBOT(state_goal) = -1;
+            STATE_ROBOT(state_init) = 3;
+            STATE_ROBOT(state_goal) = 1;
             for( int o=1; o<=n_objs; o++ )
             {
+                /*
                 STATE_OBJECT(state_init,o)->setX(  node_init["state"][0+(o-1)*3].as<double>());
                 STATE_OBJECT(state_init,o)->setY(  node_init["state"][1+(o-1)*3].as<double>());
                 STATE_OBJECT(state_init,o)->setYaw(node_init["state"][2+(o-1)*3].as<double>());
@@ -170,6 +210,31 @@ int main(int argc, char* argv[])
                 STATE_OBJECT(state_goal,o)->setX(  node_goal["state"][0+(o-1)*3].as<double>());
                 STATE_OBJECT(state_goal,o)->setY(  node_goal["state"][1+(o-1)*3].as<double>());
                 STATE_OBJECT(state_goal,o)->setYaw(node_goal["state"][2+(o-1)*3].as<double>());
+                */
+                for (int o = 1; o <= n_objs; o++) {
+                    double x_init = node_init["state"][0 + (o - 1) * 3].as<double>();
+                    double y_init = node_init["state"][1 + (o - 1) * 3].as<double>();
+                    double yaw_init = node_init["state"][2 + (o - 1) * 3].as<double>();
+
+                    STATE_OBJECT(state_init, o)->setX(x_init);
+                    STATE_OBJECT(state_init, o)->setY(y_init);
+                    STATE_OBJECT(state_init, o)->setYaw(yaw_init);
+
+                    double x_goal = node_goal["state"][0 + (o - 1) * 3].as<double>();
+                    double y_goal = node_goal["state"][1 + (o - 1) * 3].as<double>();
+                    double yaw_goal = node_goal["state"][2 + (o - 1) * 3].as<double>();
+
+                    STATE_OBJECT(state_goal, o)->setX(x_goal);
+                    STATE_OBJECT(state_goal, o)->setY(y_goal);
+                    STATE_OBJECT(state_goal, o)->setYaw(yaw_goal);
+
+                    // Output the values for monitoring
+                    std::cout << "Object " << o << " initial state: x = " << x_init
+                              << ", y = " << y_init << ", yaw = " << yaw_init << std::endl;
+                    std::cout << "Object " << o << " goal state: x = " << x_goal
+                              << ", y = " << y_goal << ", yaw = " << yaw_goal << std::endl;
+                }
+
             }
 
             if( name_experiment.compare("bluebox_kuka")==0  ||
@@ -267,7 +332,7 @@ int main(int argc, char* argv[])
             clock_t begin, end;
             begin = clock();
             
-            if( name_planner.compare(0,4,"ours")==0 )
+            if( name_planner.compare(0,4,"ours")==0 ) // jeeho: ours, ours_selfish, ours_pushing
             {
                 ifstream ifs("/home/cs1080/tmp.save");
                 planner.load_precomputed_planners(ifs);

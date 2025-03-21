@@ -1,7 +1,11 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(changkyu_planner_pushing)
 
-add_compile_options(-std=c++11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# CMake Path
+configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h @ONLY)
 
 set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 
@@ -10,9 +14,9 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(ompl REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(catkin REQUIRED COMPONENTS
-roscpp
-  shape_msgs)
+#find_package(catkin REQUIRED COMPONENTS
+#roscpp
+#  shape_msgs)
 
 set(Boost_LIBRARIES boost_program_options boost_system boost_filesystem boost_log)
 

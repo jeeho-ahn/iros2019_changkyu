@@ -1708,6 +1708,8 @@ LOG << "merge path - done";
     si_single4all_->freeState(state_curr);
 }
 
+
+
 void Planner::plan_plRS( const ompl::base::State *state_start,
                          const ompl::base::State *state_goal,
                          og::PathGeometric &path_res,
@@ -1741,6 +1743,12 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
             // 1) find a selfish path
             const ObjectState* state_0 = STATE_OBJECT(state_curr,o);
             const ObjectState* state_1 = STATE_OBJECT(state_goal,o);
+
+            // for debug (jeeho)
+            auto x0 = state_0->getX();
+            auto y0 = state_0->getY();
+            auto x1 = state_1->getX();
+            auto y1 = state_1->getY();
 
             if( si_single4all_->isValid(state_0)==false )
             {
@@ -1861,10 +1869,10 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
                             ss_single->sampleUniform(state_clear);
                             pdef_clear->addStartState(state_clear);
                         }
-                        si_single4clear_->freeState(state_clear);                        
+                        si_single4clear_->freeState(state_clear);  // jeeho: free memory
 
                         og::RRTstar planner_clear(si_single4clear_);
-                        planner_clear.setRange(0.05);
+                        planner_clear.setRange(0.05); // jeeho: max distance
                         //planner.setGoalBias(0.5);
                         planner_clear.setProblemDefinition(pdef_clear);
                         planner_clear.setup();
@@ -1936,6 +1944,9 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
 
     si_single4all_->freeState(state_curr);
 }
+
+
+
 /*
 void Planner::plan_kino( const ompl::base::State *state_start,
                          const ompl::base::State *state_goal,
@@ -2914,6 +2925,8 @@ void Planner::save_plan( const std::string &fp_save,
                          const ompl::geometric::PathGeometric &path,
                          const std::vector<Action> &actions          )
 {
+    //for debug (jeeho)
+    std::cout << fp_save << std::endl;
     double cost = compute_cost(path);
     //double dist = distance(state_goal,path.getState(path.getStateCount()-1));
     ofstream ofs(fp_save);

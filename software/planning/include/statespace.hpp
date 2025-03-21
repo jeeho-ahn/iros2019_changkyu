@@ -799,23 +799,45 @@ public:
      : RobotObjectSetup( objects, -size*0.5, size*0.5, -size*0.5, size*0.5 ),
        size_(size)
     {}
+    BoxSetup(const std::vector<Object> &objects, double minx, double maxx, double miny, double maxy)
+     : RobotObjectSetup( objects, minx, maxx, miny, maxy ),
+       size_(-1), minx_(minx), maxx_(maxx), miny_(miny), maxy_(maxy)
+    {}
     ~BoxSetup(){}
 
     bool isValid(double x, double y, double yaw)
     {
-        return ((-size_*0.5) <= x) && (x <= (size_*0.5)) &&
-               ((-size_*0.5) <= y) && (y <= (size_*0.5));    
+        if(size_>0) // jeeho: original setup
+            return ((-size_*0.5) <= x) && (x <= (size_*0.5)) &&
+                   ((-size_*0.5) <= y) && (y <= (size_*0.5));
+
+        return (minx_ <= x) && (x <= maxx_) &&
+               (miny_ <= y) && (y <= maxy_);
+
     }
 
     void getGoalState(int o, double* x, double* y, double* yaw)
     {
-        int n_cols = size_ / 0.10;
-        int r = (o-1) / n_cols;
-        int c = (o-1) % n_cols;
+        if(size_>0)
+        {
+            int n_cols = size_ / 0.10;
+            int r = (o-1) / n_cols;
+            int c = (o-1) % n_cols;
 
-        *x = -size_*0.5 + 0.13*(r + 0.5);
-        *y = -size_*0.5 + 0.10*(c + 0.5);        
-        *yaw = 0;
+            *x = -size_*0.5 + 0.13*(r + 0.5);
+            *y = -size_*0.5 + 0.10*(c + 0.5);
+            *yaw = 0;
+        }
+        else
+        {
+            int n_cols = (maxx_-minx_) / 0.10;
+            int r = (o-1) / n_cols;
+            int c = (o-1) % n_cols;
+
+            *x = minx_ + 0.13*(r + 0.5);
+            *y = miny_ + 0.10*(c + 0.5);
+            *yaw = 0;
+        }
 
 
 #if 0 // center
@@ -873,18 +895,33 @@ public:
 
     void visualizeSetup(cv::Mat &img)
     {
-        cv::line(img,cv::Point(500-500*-size_*0.5,500-500*-size_*0.5),
-                     cv::Point(500-500*-size_*0.5,500-500* size_*0.5), cv::Scalar(0,255,0) );
-        cv::line(img,cv::Point(500-500*-size_*0.5,500-500* size_*0.5),
-                     cv::Point(500-500* size_*0.5,500-500* size_*0.5), cv::Scalar(0,255,0) );
-        cv::line(img,cv::Point(500-500* size_*0.5,500-500* size_*0.5),
-                     cv::Point(500-500* size_*0.5,500-500*-size_*0.5), cv::Scalar(0,255,0) );
-        cv::line(img,cv::Point(500-500* size_*0.5,500-500*-size_*0.5),
-                     cv::Point(500-500*-size_*0.5,500-500*-size_*0.5), cv::Scalar(0,255,0) );
+        if(size_>0)
+        {
+            cv::line(img,cv::Point(500-500*-size_*0.5,500-500*-size_*0.5),
+                         cv::Point(500-500*-size_*0.5,500-500* size_*0.5), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500*-size_*0.5,500-500* size_*0.5),
+                         cv::Point(500-500* size_*0.5,500-500* size_*0.5), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500* size_*0.5,500-500* size_*0.5),
+                         cv::Point(500-500* size_*0.5,500-500*-size_*0.5), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500* size_*0.5,500-500*-size_*0.5),
+                         cv::Point(500-500*-size_*0.5,500-500*-size_*0.5), cv::Scalar(0,255,0) );
+        }
+        else
+        {
+            cv::line(img,cv::Point(500-500*minx_,500-500*miny_),
+                         cv::Point(500-500*minx_,500-500* maxy_), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500*minx_,500-500* maxy_),
+                         cv::Point(500-500* maxx_,500-500* maxy_), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500* maxx_,500-500* maxy_),
+                         cv::Point(500-500* maxx_,500-500*miny_), cv::Scalar(0,255,0) );
+            cv::line(img,cv::Point(500-500* maxx_,500-500*miny_),
+                         cv::Point(500-500*minx_,500-500*miny_), cv::Scalar(0,255,0) );
+        }
     }
 
 private:    
     double size_;
+    double minx_, maxx_, miny_, maxy_;
 };
 
 class KukaTableSetup : public RobotObjectSetup

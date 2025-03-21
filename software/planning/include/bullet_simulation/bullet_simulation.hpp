@@ -11,7 +11,8 @@
 #include "OpenGLWindow/SimpleOpenGL3App.h"
 #include "ExampleBrowser/OpenGLGuiHelper.h"
 
-#include <shape_msgs/Plane.h>
+//#include <shape_msgs/Plane.h>
+#include <ros_shape_plane.h>
 
 typedef class BulletSimulation
 {
