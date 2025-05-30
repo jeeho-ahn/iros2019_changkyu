@@ -30,6 +30,11 @@
 #define STATE_OBJREL_1(x) ((x)->as<ompl::base::CompoundStateSpace::StateType>()\
                                ->as<ObjectStateSpace::StateType>(1))
 
+const int vis_width = 600;
+const int vis_height = 780;
+const float box_width = 0.15f;
+const float box_height = 0.15f;
+
 inline double distance_angle(double b, double a)
 {
     double alpha = a * 180.0 / M_PI;
@@ -802,7 +807,9 @@ public:
     BoxSetup(const std::vector<Object> &objects, double minx, double maxx, double miny, double maxy)
      : RobotObjectSetup( objects, minx, maxx, miny, maxy ),
        size_(-1), minx_(minx), maxx_(maxx), miny_(miny), maxy_(maxy)
-    {}
+    {
+        pixel_density_ = vis_height/(maxy - miny);
+    }
     ~BoxSetup(){}
 
     bool isValid(double x, double y, double yaw)
@@ -909,23 +916,23 @@ public:
         else
         {
             cv::line(img,
-                     cv::Point((minx_/6) * 400, 500 - (miny_/6) * 500),
-                     cv::Point((minx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Point((minx_) * pixel_density_, vis_height - (miny_) * pixel_density_),
+                     cv::Point((minx_) * pixel_density_, vis_height - (maxy_) * pixel_density_),
                      cv::Scalar(0, 255, 0));
 
             cv::line(img,
-                     cv::Point((minx_/6) * 400, 500 - (maxy_/6) * 500),
-                     cv::Point((maxx_/6) * 400, 500 - (maxy_/6) * 500),
+                     cv::Point((minx_) * pixel_density_, vis_height - (maxy_) * pixel_density_),
+                     cv::Point((maxx_) * pixel_density_, vis_height - (maxy_) * pixel_density_),
                      cv::Scalar(0, 255, 0));
 
             cv::line(img,
-                     cv::Point((maxx_/6) * 400, 500 - (maxy_/6) * 500),
-                     cv::Point((maxx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Point((maxx_) * pixel_density_ - 1, vis_height - (maxy_) * pixel_density_),
+                     cv::Point((maxx_) * pixel_density_ - 1, vis_height - (miny_) * pixel_density_),
                      cv::Scalar(0, 255, 0));
 
             cv::line(img,
-                     cv::Point((maxx_/6) * 400, 500 - (miny_/6) * 500),
-                     cv::Point((minx_/6) * 400, 500 - (miny_/6) * 500),
+                     cv::Point((maxx_) * pixel_density_, vis_height - (miny_) * pixel_density_ - 1),
+                     cv::Point((minx_) * pixel_density_, vis_height - (miny_) * pixel_density_ - 1), // bottom line goes out of screen
                      cv::Scalar(0, 255, 0));
         }
     }
@@ -933,6 +940,7 @@ public:
 private:    
     double size_;
     double minx_, maxx_, miny_, maxy_;
+    double pixel_density_; // pixels/m
 };
 
 class KukaTableSetup : public RobotObjectSetup

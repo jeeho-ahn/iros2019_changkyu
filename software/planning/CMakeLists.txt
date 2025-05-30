@@ -21,7 +21,8 @@ find_package(OpenCV REQUIRED)
 set(Boost_LIBRARIES boost_program_options boost_system boost_filesystem boost_log)
 
 include_directories(
-  include  
+  include
+  include/fromReloPush
   /usr/include/eigen3/
   bullet
   bullet/Utils
@@ -77,8 +78,12 @@ add_library(${PROJECT_NAME}
   src/kinodynamicRRT.cpp 
 )
 
+# Get all .cpp files in the folder (e.g., "src")
+file(GLOB RSOURCES "src/fromReloPush/*.cpp")
+
 add_executable(run_expr
   demo/run_expr.cpp
+  ${SOURCES}
 )
 
 add_executable(gen_expr

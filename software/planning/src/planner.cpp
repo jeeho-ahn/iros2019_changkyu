@@ -61,7 +61,8 @@ static double compute_cost(const ompl::base::State* state1, const ompl::base::St
 
 static void drawSoap(cv::Mat& img, double x, double y, double yaw, cv::Scalar color, double alpha=1.0, bool fill=false)
 {
-    cv::Point point(500 - y*500, 500 - x*500);
+    //cv::Point point(500 - y*500, 500 - x*500);
+    cv::Point point(vis_height - y*vis_height, vis_width - x*vis_width);
 
     cv::Size rectangleSize(0.66 * 50,0.96 * 50);
     cv::RotatedRect rotatedRectangle(point, rectangleSize, -yaw * 180.0 / M_PI);
@@ -86,6 +87,38 @@ static void drawSoap(cv::Mat& img, double x, double y, double yaw, cv::Scalar co
         }
     }
     cv::addWeighted(tmp,alpha,img,1.0, 0.0,img);    
+}
+
+static void drawSoap(cv::Mat& img, double x, double y, double yaw, double minx, double maxx, double miny, double maxy, cv::Scalar color, double alpha=1.0, bool fill=false)
+{
+    // pixel density
+    float pd = vis_height/(maxy-miny);
+    //cv::Point point(500 - y*500, 500 - x*500);
+    cv::Point point(x*pd, vis_height - y*pd);
+
+    cv::Size rectangleSize(int(box_width*pd),int(box_height*pd));
+    cv::RotatedRect rotatedRectangle(point, rectangleSize, -yaw * 180.0 / M_PI);
+    cv::Point2f vertices2f[4];
+    rotatedRectangle.points(vertices2f);
+
+    cv::Mat tmp = cv::Mat::zeros(img.rows, img.cols, CV_8UC3);
+    if( fill )
+    {
+        cv::Point vertices[4];
+        for(int i = 0; i < 4; ++i)
+        {
+            vertices[i] = vertices2f[i];
+        }
+        cv::fillConvexPoly( tmp, vertices, 4, color );
+    }
+    else
+    {
+        for(int i = 0; i < 4; ++i)
+        {
+            cv::line(tmp, vertices2f[i], vertices2f[(i+1)%4], color);
+        }
+    }
+    cv::addWeighted(tmp,alpha,img,1.0, 0.0,img);
 }
 
 class MyIterationTerminationCondition
@@ -1471,13 +1504,13 @@ void Planner::plan( const ompl::base::State *state_start,
             const ObjectState* state_0 = STATE_OBJECT(state_curr,o);
             const ObjectState* state_1 = STATE_OBJECT(state_goal,o);
 
-            if( si_single4all_->isValid(state_0)==false )
+            if( si_single4all_->isValid(state_0)==false ) // check the state validity at state_0
             {
                 if( env_.validateSingleForAll( state_0, o, idxes_done, 
                                                STATE_OBJECT(state_curr,o)) )
                 {
                     cout << "[validating] succeed" << endl;
-                    STATE_ROBOT(state_curr) = o;
+                    STATE_ROBOT(state_curr) = o; // jeeho: ??
                     path_tmp.append(state_curr);                    
                 }
                 else
@@ -1494,12 +1527,15 @@ void Planner::plan( const ompl::base::State *state_start,
 
             ob::PlannerStatus solved;
 
+            /////////////////////////////// Replace here ///////////////////////////////
             og::RRTstar planner(si_single4all_);
             planner.setRange(0.05);
             //planner.setGoalBias(0.5);
             planner.setProblemDefinition(pdef);
             planner.setup();
-            solved = planner.solve(ob::timedPlannerTerminationCondition(10.0));
+            solved = planner.solve(ob::timedPlannerTerminationCondition(10.0)); // jeeho: replace this with Hybrid A*
+            // define static, movable obstacles, and remove start from obstacle
+            ////////////////////////////////////////////////////////////////////////////
 
             if( solved ) 
             {
@@ -1612,7 +1648,7 @@ void Planner::plan( const ompl::base::State *state_start,
                     */
                 }
 
-                if( res )
+                if( res ) // jeeho: if success, update new pose
                 {
                     STATE_OBJECT(state_curr,o)->setX(  state_1->getX());
                     STATE_OBJECT(state_curr,o)->setY(  state_1->getY());
@@ -2902,11 +2938,11 @@ void Planner::visualizePath(cv::Mat& img, const og::PathGeometric &path, bool is
                 {
                     const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1), q);
 
-                    int x1 = static_cast<int>((state_prv->getX() / 6.0) * 400);
-                    int y1 = static_cast<int>(500 - ((state_prv->getY() / 6.0) * 500));
+                    int x1 = static_cast<int>((state_prv->getX() / 6.0) * vis_width);
+                    int y1 = static_cast<int>(vis_height - ((state_prv->getY() / 6.0) * vis_height));
 
-                    int x2 = static_cast<int>((state_obj->getX() / 6.0) * 400);
-                    int y2 = static_cast<int>(500 - ((state_obj->getY() / 6.0) * 500));
+                    int x2 = static_cast<int>((state_obj->getX() / 6.0) * vis_width);
+                    int y2 = static_cast<int>(vis_height - ((state_obj->getY() / 6.0) * vis_height));
 
                     line(img, cv::Point(x1, y1), cv::Point(x2, y2), color);
                 }
@@ -2915,6 +2951,80 @@ void Planner::visualizePath(cv::Mat& img, const og::PathGeometric &path, bool is
 
     }
 }
+
+
+// jeeho
+void Planner::visualizePath(cv::Mat& img, const og::PathGeometric &path, double minx, double maxx, double miny, double maxy, bool is_relopush)
+{
+    double pixel_density = vis_height / (maxy-miny);
+    if(!is_relopush)
+    {
+        for( int p=0; p<path.getStateCount(); p++ )
+        {
+            double alpha = 0.5 + 0.5*((p+1)/(double)path.getStateCount());
+            const ompl::base::State* state = path.getState(p);
+            for( int q=1; q<=n_objs_; q++ )
+            {
+                cv::Scalar color = cv::Scalar(colors_.at<cv::Vec3b>(q-1,0)[2],
+                                              colors_.at<cv::Vec3b>(q-1,0)[1],
+                                              colors_.at<cv::Vec3b>(q-1,0)[0]);
+
+                const ObjectState* state_obj = STATE_OBJECT(state,q);
+                drawSoap( img,state_obj->getX(), state_obj->getY(), state_obj->getYaw(),
+                          color, alpha, p==0 || p==path.getStateCount()-1 );
+
+                if( p>0 )
+                {
+                    const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1),q);
+
+                    int x1 = vis_height-state_prv->getY()*pixel_density;
+                    int y1 = vis_width-state_prv->getX()*pixel_density;
+
+                    int x2 = vis_height-state_obj->getY()*pixel_density;
+                    int y2 = vis_width-state_obj->getX()*pixel_density;
+                    line(img, cv::Point(x1,y1), cv::Point(x2,y2), color );
+                }
+            }
+        }
+    }
+    else
+    {
+        for( int p=0; p<path.getStateCount(); p++ )
+        {
+            double alpha = 0.5 + 0.5*((p+1)/(double)path.getStateCount());
+            const ompl::base::State* state = path.getState(p);
+            for( int q=1; q<=n_objs_; q++ )
+            {
+                cv::Scalar color = cv::Scalar(colors_.at<cv::Vec3b>(q-1,0)[2],
+                                              colors_.at<cv::Vec3b>(q-1,0)[1],
+                                              colors_.at<cv::Vec3b>(q-1,0)[0]);
+
+                const ObjectState* state_obj = STATE_OBJECT(state,q);
+                drawSoap( img,state_obj->getX(), state_obj->getY(), state_obj->getYaw(), 0,4,0,5.2,
+                          color, alpha, p==0 || p==path.getStateCount()-1 );
+
+                if( p > 0 )
+                {
+                    const ObjectState* state_prv = STATE_OBJECT(path.getState(p-1), q);
+
+                    auto temp_x1 = state_prv->getX(); //jeeho: for debug only
+                    auto temp_y1 = state_prv->getY();
+                    auto temp_x2 = state_obj->getX();
+                    auto temp_y2 = state_obj->getY();
+
+                    int y1 = vis_height-state_prv->getY()*pixel_density;
+                    int x1 = state_prv->getX()*pixel_density;
+
+                    int y2 = vis_height-state_obj->getY()*pixel_density;
+                    int x2 = state_obj->getX()*pixel_density;
+                    line(img, cv::Point(x1, y1), cv::Point(x2, y2), color);
+                }
+            }
+        }
+
+    }
+}
+
 
 void Planner::visualizeState(cv::Mat& img, const ompl::base::State* state)
 {

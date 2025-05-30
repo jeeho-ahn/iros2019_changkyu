@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
     name_planner = "ours_selfish";
     vis = true;
     skip = false;
-    ns = {1}; // num of object
+    ns = {9}; // num of object
     ks = {1};
 
     //string dp_root = "/home/jeeho/cpp_ws/iros2019_changkyu/software/planning";
@@ -93,13 +93,13 @@ int main(int argc, char* argv[])
     }
 */        
     //for( int i=1; i<=i_max; i++ )    
-    for( int k=0;k<ks.size(); k++)
+    for( int k=0;k<ks.size(); k++) // jeeho: for each instance?
     {   
         int i=ks[k];
         //if( k!=-1 && i!=k ) continue;
-        for( int j=0; j<ns.size(); j++ )
+        for( int j=0; j<ns.size(); j++ ) // jeeho: for each 'number of objects'
         {
-            int n = ns[j];            
+            int n = ns[j];            // jeeho: corresponding number of objects
             string name = "ours"; // jeeho: ??
 
             int n_objs = n;
@@ -107,18 +107,20 @@ int main(int argc, char* argv[])
             vector<RobotObjectSetup::Object> objects(n_objs);
             for( int o=0; o<n_objs; o++ )
             {
-                objects[o].name = "dove_beauty_bar";
+                //objects[o].name = "dove_beauty_bar";
+                objects[o].name = "relo_box";
                 objects[o].dims.resize(3);
-                objects[o].dims[0] = 0.035;
-                objects[o].dims[1] = 0.066;
-                objects[o].dims[2] = 0.096;
-                objects[o].radius  = sqrt(0.096*0.096 + 0.066*0.066)*0.5;
+                objects[o].dims[0] = 0.3; // z dim?
+                objects[o].dims[1] = box_width; // width
+                objects[o].dims[2] = box_height; // height
+                //objects[o].radius  = sqrt(0.096*0.096 + 0.066*0.066)*0.5;
+                objects[o].radius  = sqrt(box_height*box_height + box_width*box_width)*0.5; // jeeho
                 objects[o].q_offset.setEulerZYX(0, -89.9999/ 180.0 * M_PI, 0);
                 objects[o].shape = new btBoxShape(btVector3(objects[o].dims[0]*0.5, 
                                                             objects[o].dims[1]*0.5, 
                                                             objects[o].dims[2]*0.5));
-                objects[o].z_offset = 0.035 * 0.5;
-                objects[o].mass = 0.135;
+                objects[o].z_offset = 0.3 * 0.5;
+                objects[o].mass = 0.135; // jeeho: not changed
             }
             
             RobotObjectSetup* env;
@@ -177,8 +179,8 @@ int main(int argc, char* argv[])
             */
             // manual file name
 
-            fp_init = dp_root + "/input/relopush/input_1obj.init";
-            fp_goal = dp_root + "/input/relopush/output_1obj.goal";
+            fp_init = dp_root + "/input/relopush/input_9obj.init";
+            fp_goal = dp_root + "/input/relopush/output_9obj.goal";
             sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
 
             fs::path path_res(fp_res);
@@ -198,44 +200,35 @@ int main(int argc, char* argv[])
             YAML::Node node_init = YAML::LoadFile(fp_init);
             YAML::Node node_goal = YAML::LoadFile(fp_goal);
 
-            STATE_ROBOT(state_init) = 3;
+            STATE_ROBOT(state_init) = 3; // jeeho: ??
             STATE_ROBOT(state_goal) = 1;
-            for( int o=1; o<=n_objs; o++ )
-            {
-                /*
-                STATE_OBJECT(state_init,o)->setX(  node_init["state"][0+(o-1)*3].as<double>());
-                STATE_OBJECT(state_init,o)->setY(  node_init["state"][1+(o-1)*3].as<double>());
-                STATE_OBJECT(state_init,o)->setYaw(node_init["state"][2+(o-1)*3].as<double>());
 
-                STATE_OBJECT(state_goal,o)->setX(  node_goal["state"][0+(o-1)*3].as<double>());
-                STATE_OBJECT(state_goal,o)->setY(  node_goal["state"][1+(o-1)*3].as<double>());
-                STATE_OBJECT(state_goal,o)->setYaw(node_goal["state"][2+(o-1)*3].as<double>());
-                */
-                for (int o = 1; o <= n_objs; o++) {
-                    double x_init = node_init["state"][0 + (o - 1) * 3].as<double>();
-                    double y_init = node_init["state"][1 + (o - 1) * 3].as<double>();
-                    double yaw_init = node_init["state"][2 + (o - 1) * 3].as<double>();
 
-                    STATE_OBJECT(state_init, o)->setX(x_init);
-                    STATE_OBJECT(state_init, o)->setY(y_init);
-                    STATE_OBJECT(state_init, o)->setYaw(yaw_init);
+            for (int o = 1; o <= n_objs; o++) {
+                double x_init = node_init["state"][0 + (o - 1) * 3].as<double>();
+                double y_init = node_init["state"][1 + (o - 1) * 3].as<double>();
+                double yaw_init = node_init["state"][2 + (o - 1) * 3].as<double>();
 
-                    double x_goal = node_goal["state"][0 + (o - 1) * 3].as<double>();
-                    double y_goal = node_goal["state"][1 + (o - 1) * 3].as<double>();
-                    double yaw_goal = node_goal["state"][2 + (o - 1) * 3].as<double>();
+                STATE_OBJECT(state_init, o)->setX(x_init);
+                STATE_OBJECT(state_init, o)->setY(y_init);
+                STATE_OBJECT(state_init, o)->setYaw(yaw_init);
 
-                    STATE_OBJECT(state_goal, o)->setX(x_goal);
-                    STATE_OBJECT(state_goal, o)->setY(y_goal);
-                    STATE_OBJECT(state_goal, o)->setYaw(yaw_goal);
+                double x_goal = node_goal["state"][0 + (o - 1) * 3].as<double>();
+                double y_goal = node_goal["state"][1 + (o - 1) * 3].as<double>();
+                double yaw_goal = node_goal["state"][2 + (o - 1) * 3].as<double>();
 
-                    // Output the values for monitoring
-                    std::cout << "Object " << o << " initial state: x = " << x_init
-                              << ", y = " << y_init << ", yaw = " << yaw_init << std::endl;
-                    std::cout << "Object " << o << " goal state: x = " << x_goal
-                              << ", y = " << y_goal << ", yaw = " << yaw_goal << std::endl;
-                }
+                STATE_OBJECT(state_goal, o)->setX(x_goal);
+                STATE_OBJECT(state_goal, o)->setY(y_goal);
+                STATE_OBJECT(state_goal, o)->setYaw(yaw_goal);
 
+                // Output the values for monitoring
+                std::cout << "Object " << o << " initial state: x = " << x_init
+                          << ", y = " << y_init << ", yaw = " << yaw_init << std::endl;
+                std::cout << "Object " << o << " goal state: x = " << x_goal
+                          << ", y = " << y_goal << ", yaw = " << yaw_goal << std::endl;
             }
+
+
 
             if( name_experiment.compare("bluebox_kuka")==0  ||
                 name_experiment.compare("rectbox_kuka")==0    )
@@ -334,9 +327,9 @@ int main(int argc, char* argv[])
             
             if( name_planner.compare(0,4,"ours")==0 ) // jeeho: ours, ours_selfish, ours_pushing
             {
-                ifstream ifs("/home/cs1080/tmp.save");
-                planner.load_precomputed_planners(ifs);
-                ifs.close();
+                //ifstream ifs("/home/cs1080/tmp.save");
+                //planner.load_precomputed_planners(ifs);
+                //ifs.close();
                 planner.plan(state_init, state_goal, path, actions, do_merge);
             }
             else if( name_planner.compare("plrs")==0 )
@@ -366,12 +359,13 @@ int main(int argc, char* argv[])
             {
                 cv::Mat img;
                 if(name_experiment.compare("relopush")==0)
-                    img = cv::Mat::zeros(500,400,CV_8UC3); // jeeho: relopush setup
+                    img = cv::Mat::zeros(vis_height,vis_width,CV_8UC3); // jeeho: relopush setup
                 else
                     img =cv::Mat::zeros(1000,1000,CV_8UC3);
 
                 env->visualizeSetup(img);
-                planner.visualizePath(img,path,(name_experiment.compare("relopush")==0));
+                //planner.visualizePath(img,path,(name_experiment.compare("relopush")==0));
+                planner.visualizePath(img,path,0,4,0,5.2);
                 cv::imshow("vis",img);
                 cv::waitKey();
             }

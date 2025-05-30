@@ -114,6 +114,8 @@ public:
                            const std::vector<Action> &actions          );
 
     void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path, bool is_relopush = false);
+    void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path, double minx, double maxx, double miny, double maxy, bool is_relopush = true);
+
     void visualizeState(cv::Mat& img, const ompl::base::State* state);
 
     void test();    
