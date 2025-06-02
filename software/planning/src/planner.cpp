@@ -2011,27 +2011,83 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
             const ObjectState *state_1 = STATE_OBJECT(state_goal, o);
 
             // Correctly using ReloPush::State
-            ReloPush::State dubins_start(state_0->getX(), state_0->getY(), state_0->getYaw());
-            ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
+            // ReloPush::State dubins_start(state_0->getX(), state_0->getY(), state_0->getYaw());
+            // ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
 
             // Turning radius from steering angle rho = 0.21
-            //double rho = 0.21;
+            // double rho = 0.21;
             double turning_radius = 0.2;
 
             // Correctly calling findDubins function
-            reloDubinsPath dubins_path = findDubins(dubins_start, dubins_goal, turning_radius, false);
-
+            // reloDubinsPath dubins_path = findDubins(dubins_start, dubins_goal, turning_radius, false);
             // Check Dubins path validity (probably not happening)
+            /*
             if (dubins_path.omplDubins.length() == std::numeric_limits<double>::max())
             {
                 cout << "Dubins path failed (object " << o << ")" << endl;
                 succ = false;
                 break;
             }
+            */
+
+            // Four orientations based on original yaw offset
+            vector<double> orientations = {
+                state_0->getYaw(),
+                state_0->getYaw() + M_PI_2,
+                state_0->getYaw() + M_PI,
+                state_0->getYaw() + 3 * M_PI_2};
+
+            double best_length = numeric_limits<double>::max();
+            reloDubinsPath best_dubins_path;
+            bool found_valid_pose = false;
+
+            for (double yaw : orientations)
+            {
+                ReloPush::State candidate_start(state_0->getX(), state_0->getY(), yaw);
+                ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
+
+                reloDubinsPath dubins_path = findDubins(candidate_start, dubins_goal, turning_radius);
+
+                // probably not happening
+                if (dubins_path.omplDubins.length() == numeric_limits<double>::max())
+                    continue;
+
+                if (dubins_path.lengthCost() < best_length)
+                {
+                    best_length = dubins_path.lengthCost();
+                    best_dubins_path = dubins_path;
+                }
+
+                /*
+                auto interpolated_path = dubins_path.interpolate(0.05f);
+                bool collision = false;
+
+                ob::State *check_state = si_single4all_->allocState();
+                for (const auto &wp : *interpolated_path)
+                {
+                    check_state->as<ObjectState>()->setX(wp.x);
+                    check_state->as<ObjectState>()->setY(wp.y);
+                    check_state->as<ObjectState>()->setYaw(wp.yaw);
+                    if (!si_single4all_->isValid(check_state))
+                    {
+                        collision = true;
+                        break;
+                    }
+                }
+                si_single4all_->freeState(check_state);
+
+                if (!collision && dubins_path.lengthCost() < best_length)
+                {
+                    best_length = dubins_path.lengthCost();
+                    best_dubins_path = dubins_path;
+                    found_valid_pose = true;
+                }
+                */
+            }
 
             // Interpolate Dubins path for collision checking
             float interp_res = 0.05f; // collision checking resolution
-            ReloPush::StatePathPtr interpolated_path = dubins_path.interpolate(interp_res);
+            ReloPush::StatePathPtr interpolated_path = best_dubins_path.interpolate(interp_res);
 
             // Collision checking
             vector<int> idxes_collide;
@@ -2108,7 +2164,7 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
                     }
 
                     og::RRTstar planner_clear(si_single4clear_);
-                    planner_clear.setRange(0.1); // increased range
+                    planner_clear.setRange(0.3); // increased range
                     planner_clear.setProblemDefinition(pdef_clear);
                     planner_clear.setup();
                     ob::PlannerStatus solved = planner_clear.solve(ob::timedPlannerTerminationCondition(5.0)); // shorter timeout
