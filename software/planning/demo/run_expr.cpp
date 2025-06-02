@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 
     id = 0;
     name_experiment = "relopush";
-    name_planner = "ours_selfish";
+    name_planner = "plrs";
     vis = true;
     skip = false;
     ns = {9}; // num of object
@@ -334,7 +334,9 @@ int main(int argc, char* argv[])
             }
             else if( name_planner.compare("plrs")==0 )
             {
-                planner.plan_plRS(state_init, state_goal, path, actions);
+                //planner.plan_plRS(state_init, state_goal, path, actions);
+
+                planner.plan_plrs_jeeho(state_init, state_goal, path, actions);
             }
             else if( name_planner.compare("mopl")==0 )
             {

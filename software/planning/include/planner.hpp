@@ -11,6 +11,10 @@
 
 #include "mdp_planner.hpp"
 
+#include <fromReloPush/DubinsTools.h>
+#include <cmath>  //  std::tan, std::sqrt
+#include <limits> //  std::numeric_limits
+
 #define DEBUG 1
 
 class Planner 
@@ -61,16 +65,22 @@ public:
                     const ompl::base::State *state_goal,
                     ompl::geometric::PathGeometric &path_res,
                     std::vector<Action> &actions_res );
-/*
-    void plan_kino( const ompl::base::State *state_start,
-                    const ompl::base::State *state_goal,
-                    ompl::geometric::PathGeometric &path_res,
-                    std::vector<Action> &actions_res );
-*/
-    bool simulate( const ompl::base::State* state, int idx, 
-                   const std::vector<btVector3> &pos_delta, 
-                   const std::vector<double> &yaw_delta,
-                   std::vector<ompl::base::State*> &state_res );
+
+    void plan_plrs_jeeho(const ompl::base::State *state_start,
+                         const ompl::base::State *state_goal,
+                         ompl::geometric::PathGeometric &path_res,
+                         std::vector<Action> &actions_res);
+
+    /*
+        void plan_kino( const ompl::base::State *state_start,
+                        const ompl::base::State *state_goal,
+                        ompl::geometric::PathGeometric &path_res,
+                        std::vector<Action> &actions_res );
+    */
+    bool simulate(const ompl::base::State *state, int idx,
+                  const std::vector<btVector3> &pos_delta,
+                  const std::vector<double> &yaw_delta,
+                  std::vector<ompl::base::State *> &state_res);
 
     bool simulate( const ompl::base::State* state, int o, 
                    const ompl::geometric::PathGeometric &path_obj,

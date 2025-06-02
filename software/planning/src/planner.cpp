@@ -1926,7 +1926,7 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
                             for( int p=path_clear.getStateCount()-1; p>=0; p-- )
                             {
                                 ObjectState* state_p = path_clear.getState(p)->as<ObjectState>();                        
-                                state_c->setX(state_p->getX());
+                                state_c->setX(state_p->getX()); // updates object pose
                                 state_c->setY(state_p->getY());
                                 state_c->setYaw(state_p->getYaw());
                                 path_tmp.append(state_curr);
@@ -1949,7 +1949,7 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
                 for( int p=1; p<path.getStateCount(); p++ )
                 {
                     ObjectState* state_p = path.getState(p)->as<ObjectState>();                        
-                    state_o->setX(state_p->getX());
+                    state_o->setX(state_p->getX()); // changes state_curr pose
                     state_o->setY(state_p->getY());
                     state_o->setYaw(state_p->getYaw());
                     path_tmp.append(state_curr);
@@ -1981,7 +1981,190 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
     si_single4all_->freeState(state_curr);
 }
 
+void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
+                              const ompl::base::State *state_goal,
+                              og::PathGeometric &path_res,
+                              std::vector<Action> &actions_res)
+{
+    LOG << "plan started (plrs_jeeho)";
+    vector<int> order_objs(n_objs_);
+    for (int o = 1; o <= n_objs_; o++)
+        order_objs[o - 1] = o;
 
+    ob::State *state_curr = si_all4all_->allocState();
+    bool succ = true;
+
+    do
+    {
+        succ = true;
+        og::PathGeometric path_tmp(si_all4all_);
+        si_all4all_->copyState(state_curr, state_start);
+
+        vector<int> idxes_done;
+        for (int i = 0; i < n_objs_; i++)
+        {
+            int o = order_objs[i];
+
+            env_.setParamSingleForAll(o, idxes_done, state_curr);
+
+            const ObjectState *state_0 = STATE_OBJECT(state_curr, o);
+            const ObjectState *state_1 = STATE_OBJECT(state_goal, o);
+
+            // Correctly using ReloPush::State
+            ReloPush::State dubins_start(state_0->getX(), state_0->getY(), state_0->getYaw());
+            ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
+
+            // Turning radius from steering angle rho = 0.21
+            //double rho = 0.21;
+            double turning_radius = 0.2;
+
+            // Correctly calling findDubins function
+            reloDubinsPath dubins_path = findDubins(dubins_start, dubins_goal, turning_radius, false);
+
+            // Check Dubins path validity (probably not happening)
+            if (dubins_path.omplDubins.length() == std::numeric_limits<double>::max())
+            {
+                cout << "Dubins path failed (object " << o << ")" << endl;
+                succ = false;
+                break;
+            }
+
+            // Interpolate Dubins path for collision checking
+            float interp_res = 0.05f; // collision checking resolution
+            ReloPush::StatePathPtr interpolated_path = dubins_path.interpolate(interp_res);
+
+            // Collision checking
+            vector<int> idxes_collide;
+            RobotObjectSetup::ParamSingleForAll param_org = env_.getParamSingleForAll();
+            ob::State *state_midd = si_single4all_->allocState();
+
+            for (const auto &state_wp : *interpolated_path)
+            {
+                state_midd->as<ObjectState>()->setX(state_wp.x);
+                state_midd->as<ObjectState>()->setY(state_wp.y);
+                state_midd->as<ObjectState>()->setYaw(state_wp.yaw);
+
+                for (int c = 1; c <= n_objs_; c++)
+                {
+                    if (c == o)
+                        continue;
+
+                    vector<int> idxes_c(1, c);
+                    env_.setParamSingleForAll(o, idxes_c, state_curr);
+
+                    if (!si_single4all_->isValid(state_midd))
+                    {
+                        if (std::find(idxes_collide.begin(), idxes_collide.end(), c) == idxes_collide.end())
+                            idxes_collide.push_back(c);
+                    }
+                }
+            }
+            si_single4all_->freeState(state_midd);
+            env_.setParamSingleForAll(param_org);
+
+            // Obstacle clearance handling (unchanged from your original code)
+            if (!idxes_collide.empty())
+            {
+                ompl::base::StateSamplerPtr ss_single = si_single4clear_->allocStateSampler();
+                vector<pair<int, ObjectState *>> obstacles;
+                for (int oo = 1; oo <= n_objs_; oo++)
+                    obstacles.emplace_back(oo, STATE_OBJECT(state_curr, oo));
+
+                for (int c : idxes_collide)
+                {
+                    // Ensure path_tmp is non-empty
+                    if (path_tmp.getStateCount() == 0)
+                    {
+                        path_tmp.append(state_curr);
+                    }
+                    env_.setParamSingleForClear(c, o, path_tmp, obstacles);
+
+                    // Clearance planning
+                    ObjectState *state_c = STATE_OBJECT(state_curr, c);
+
+                    ob::ProblemDefinitionPtr pdef_clear(new ob::ProblemDefinition(si_single4clear_));
+                    pdef_clear->setOptimizationObjective(opt_inf);
+                    pdef_clear->setGoalState(state_c);
+
+                    ob::State *state_clear = si_single4clear_->allocState();
+                    int valid_start_states = 0;
+                    for (int cc = 0; cc < 300 && valid_start_states < 50; cc++)
+                    {
+                        ss_single->sampleUniform(state_clear);
+                        if (si_single4clear_->isValid(state_clear))
+                        {
+                            pdef_clear->addStartState(state_clear);
+                            valid_start_states++;
+                        }
+                    }
+                    si_single4clear_->freeState(state_clear);
+
+                    // Check if there are enough valid start states
+                    if (valid_start_states == 0)
+                    {
+                        cout << "No valid start states found for clearance (object " << c << ")" << endl;
+                        succ = false;
+                        break;
+                    }
+
+                    og::RRTstar planner_clear(si_single4clear_);
+                    planner_clear.setRange(0.1); // increased range
+                    planner_clear.setProblemDefinition(pdef_clear);
+                    planner_clear.setup();
+                    ob::PlannerStatus solved = planner_clear.solve(ob::timedPlannerTerminationCondition(5.0)); // shorter timeout
+
+                    auto geom_path_clear = static_cast<og::PathGeometric *>(pdef_clear->getSolutionPath().get());
+
+                    if (!solved || !geom_path_clear ||
+                        si_single4clear_->distance(geom_path_clear->getStates().back(), state_c) >= thresh_goal)
+                    {
+                        cout << "Clearance failed or incomplete (object " << c << ")" << endl;
+                        succ = false;
+                        break;
+                    }
+
+                    auto &path_clear = *geom_path_clear;
+                    STATE_ROBOT(state_curr) = c;
+                    path_tmp.append(state_curr);
+                    for (int p = path_clear.getStateCount() - 1; p >= 0; p--)
+                    {
+                        auto state_p = path_clear.getState(p)->as<ObjectState>();
+                        state_c->setX(state_p->getX());
+                        state_c->setY(state_p->getY());
+                        state_c->setYaw(state_p->getYaw());
+                        path_tmp.append(state_curr);
+                    }
+                }
+                if (!succ)
+                    break;
+            }
+
+            // Append main Dubins path to result
+            STATE_ROBOT(state_curr) = o;
+            path_tmp.append(state_curr);
+            ObjectState *state_o = STATE_OBJECT(state_curr, o);
+            for (const auto &dubins_wp : *interpolated_path)
+            {
+                state_o->setX(dubins_wp.x);
+                state_o->setY(dubins_wp.y);
+                state_o->setYaw(dubins_wp.yaw);
+                path_tmp.append(state_curr);
+            }
+
+            idxes_done.push_back(o);
+        }
+
+        if (succ)
+        {
+            path_res = path_tmp;
+            break;
+        }
+
+    } while (next_permutation(order_objs.begin(), order_objs.end()));
+
+    path2Actions(path_res, actions_res);
+    si_all4all_->freeState(state_curr);
+}
 
 /*
 void Planner::plan_kino( const ompl::base::State *state_start,

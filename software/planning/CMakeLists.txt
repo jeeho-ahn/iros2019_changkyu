@@ -71,15 +71,16 @@ target_link_libraries(bullet_simulation
   dl ${CMAKE_THREAD_LIBS_INIT}
 )
 
+# Get all .cpp files in the folder (e.g., "src")
+file(GLOB RSOURCES "src/fromReloPush/*.cpp")
+
 add_library(${PROJECT_NAME}
   src/planner.cpp
   src/mdp_planner.cpp
   src/statespace.cpp
-  src/kinodynamicRRT.cpp 
+  src/kinodynamicRRT.cpp
+  ${RSOURCES}
 )
-
-# Get all .cpp files in the folder (e.g., "src")
-file(GLOB RSOURCES "src/fromReloPush/*.cpp")
 
 add_executable(run_expr
   demo/run_expr.cpp
