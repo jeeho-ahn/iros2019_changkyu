@@ -2041,21 +2041,26 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
             reloDubinsPath best_dubins_path;
             bool found_valid_pose = false;
 
-            for (double yaw : orientations)
+            // Loop for picking one best start/goal pose pair out of 16 possible
+            for (double yaw : orientations) // starting push pose
             {
                 ReloPush::State candidate_start(state_0->getX(), state_0->getY(), yaw);
-                ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
-
-                reloDubinsPath dubins_path = findDubins(candidate_start, dubins_goal, turning_radius);
-
-                // probably not happening
-                if (dubins_path.omplDubins.length() == numeric_limits<double>::max())
-                    continue;
-
-                if (dubins_path.lengthCost() < best_length)
+                for(double yaw_g : orientations) // arriving pose
                 {
-                    best_length = dubins_path.lengthCost();
-                    best_dubins_path = dubins_path;
+                    //ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
+                    ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), yaw_g);
+
+                    reloDubinsPath dubins_path = findDubins(candidate_start, dubins_goal, turning_radius);
+
+                    // probably not happening
+                    if (dubins_path.omplDubins.length() == numeric_limits<double>::max())
+                        continue;
+
+                    if (dubins_path.lengthCost() < best_length)
+                    {
+                        best_length = dubins_path.lengthCost();
+                        best_dubins_path = dubins_path;
+                    }
                 }
 
                 /*
