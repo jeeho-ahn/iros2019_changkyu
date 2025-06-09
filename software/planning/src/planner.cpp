@@ -2016,7 +2016,7 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
 
             // Turning radius from steering angle rho = 0.21
             // double rho = 0.21;
-            double turning_radius = 0.2;
+            double turning_radius = 1.41;
 
             // Correctly calling findDubins function
             // reloDubinsPath dubins_path = findDubins(dubins_start, dubins_goal, turning_radius, false);
@@ -2042,10 +2042,10 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
             bool found_valid_pose = false;
 
             // Loop for picking one best start/goal pose pair out of 16 possible
-            for (double yaw : orientations) // starting push pose
+            for (double yaw : orientations) // starting push poses
             {
                 ReloPush::State candidate_start(state_0->getX(), state_0->getY(), yaw);
-                for(double yaw_g : orientations) // arriving pose
+                for(double yaw_g : orientations) // arriving poses
                 {
                     //ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), state_1->getYaw());
                     ReloPush::State dubins_goal(state_1->getX(), state_1->getY(), yaw_g);
@@ -2124,6 +2124,7 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
             env_.setParamSingleForAll(param_org);
 
             // Obstacle clearance handling (unchanged from your original code)
+
             if (!idxes_collide.empty())
             {
                 ompl::base::StateSamplerPtr ss_single = si_single4clear_->allocStateSampler();
@@ -2199,6 +2200,9 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
                 if (!succ)
                     break;
             }
+            
+
+
 
             // Append main Dubins path to result
             STATE_ROBOT(state_curr) = o;
@@ -2220,6 +2224,7 @@ void Planner::plan_plrs_jeeho(const ompl::base::State *state_start,
             path_res = path_tmp;
             break;
         }
+        
 
     } while (next_permutation(order_objs.begin(), order_objs.end()));
 
