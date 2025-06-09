@@ -70,11 +70,66 @@ int main(int argc, char* argv[])
     name_planner = "plrs";
     vis = true;
     skip = false;
-    ns = {9}; // num of object
+    ns = {5}; // num of object
     ks = {1};
 
-    //string dp_root = "/home/jeeho/cpp_ws/iros2019_changkyu/software/planning";
+    std::string fp_init, fp_goal;
+    char fp_res[256];
+
+    /*
+    sprintf(fp_init,"%s/input/%s/%s.n%d.%03d.init",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, i);
+    sprintf(fp_goal,"%s/input/%s/%s.n%d.%03d.goal",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, 1);
+    sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
+    */
+    // manual file name
     string dp_root = cmake_dir;
+    fp_init = dp_root + "/input/relopush/input_6obj.init";
+    fp_goal = dp_root + "/input/relopush/output_6obj.goal";
+
+
+
+    // preset
+
+    int relopush_n = 9;
+    if(relopush_n==4)
+    {
+        ns={4};
+        fp_init = dp_root + "/input/relopush/input_4obj.init";
+        fp_goal = dp_root + "/input/relopush/output_4obj.goal";
+    }
+    else if(relopush_n==5)
+    {
+        ns={5};
+        fp_init = dp_root + "/input/relopush/input_5obj.init";
+        fp_goal = dp_root + "/input/relopush/output_5obj.goal";
+    }
+    else if(relopush_n==6)
+    {
+        ns={6};
+        fp_init = dp_root + "/input/relopush/input_6obj.init";
+        fp_goal = dp_root + "/input/relopush/output_6obj.goal";
+    }
+    else if(relopush_n==9)
+    {
+        ns={9};
+        fp_init = dp_root + "/input/relopush/input_9obj.init";
+        fp_goal = dp_root + "/input/relopush/output_9obj.goal";
+    }
+
+
+    // override
+    /*
+    ns={2};
+    fp_init = dp_root + "/input/tabletop_kuka/dove_beauty_bar.n2.004.init";
+    fp_goal = dp_root + "/input/tabletop_kuka/dove_beauty_bar.n2.001.goal";
+    name_experiment = "tabletop_kuka";
+    */
+
+
+
+
+    //string dp_root = "/home/jeeho/cpp_ws/iros2019_changkyu/software/planning";
+
 
     if( name_planner.compare("ours_selfish")==0 )
     {
@@ -169,18 +224,11 @@ int main(int argc, char* argv[])
 
             //char fp_init[256], fp_goal[256], fp_res[256];
 
-            std::string fp_init, fp_goal;
-            char fp_res[256];
 
-            /*
-            sprintf(fp_init,"%s/input/%s/%s.n%d.%03d.init",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, i);
-            sprintf(fp_goal,"%s/input/%s/%s.n%d.%03d.goal",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, 1);
-            sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
-            */
-            // manual file name
 
-            fp_init = dp_root + "/input/relopush/input_9obj.init";
-            fp_goal = dp_root + "/input/relopush/output_9obj.goal";
+
+
+
             sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
 
             fs::path path_res(fp_res);
@@ -356,6 +404,8 @@ int main(int argc, char* argv[])
             end = clock();
             double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;          
             planner.save_plan( fp_res, name, n_objs, time_spent, -1, state_init, state_goal, path, actions );
+
+            std::cout << "Result path length: " << path.length() << std::endl;
 
             if( vis )
             {

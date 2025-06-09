@@ -183,6 +183,14 @@ private:
                                       ompl::geometric::PathGeometric &path_sep, 
                                       double* cost );
 
+    /// Perform obstacle‐clearance for all IDs in idxes_collide, appending to path_tmp.
+    /// Returns true if *all* collided objects were successfully cleared,
+    /// false on the first failure (no side‐effect beyond what was appended so far).
+    bool clearObstacles(const std::vector<int>& idxes_collide,
+                        int o,
+                        ob::State* state_curr,
+                        og::PathGeometric& path_tmp);
+
     RobotObjectSetup &env_;
     ompl::base::SpaceInformationPtr si_single_;
     ompl::base::SpaceInformationPtr si_single4all_;
