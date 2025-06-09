@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
 
     // preset
 
-    int relopush_n = 9;
+    int relopush_n = 6;
     if(relopush_n==4)
     {
         ns={4};
