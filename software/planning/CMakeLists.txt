@@ -79,6 +79,7 @@ add_library(${PROJECT_NAME}
   src/mdp_planner.cpp
   src/statespace.cpp
   src/kinodynamicRRT.cpp
+  src/planner_tools.cpp
   ${RSOURCES}
 )
 

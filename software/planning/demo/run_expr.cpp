@@ -383,6 +383,9 @@ int main(int argc, char* argv[])
             {
                 //planner.plan_plRS(state_init, state_goal, path, actions);
 
+                //debug
+                auto oy = STATE_OBJECT(state_init,3)->getYaw();
+
                 planner.plan_plrs_jeeho(state_init, state_goal, path, actions);
             }
             else if( name_planner.compare("mopl")==0 )
