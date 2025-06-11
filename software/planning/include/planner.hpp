@@ -208,12 +208,14 @@ private:
                      og::PathGeometric &path_tmp);
 
     // Inject the recorded collision poses and clear them.
+    /*
     bool doClearance(int o,
                      const std::vector<int> &idxes_collide,
                      const std::unordered_map<int,ReloPush::State> &collision_pose,
                      ob::State *state_curr,
                      const og::PathGeometric &selfish_path,
                      og::PathGeometric &path_tmp);
+    */
 
     bool clearObstacles(const std::vector<int>& idxes_collide,
                                  int o,
@@ -222,11 +224,13 @@ private:
                                  og::PathGeometric& path_tmp);
 
     // implementation of clearance
+    /*
     bool clearObstacles(const std::vector<int>& idxes_collide,
                         int o,
                         ob::State* state_curr,
                         const og::PathGeometric &selfish_path,
                         og::PathGeometric& path_tmp);
+                        */
 
     // Append a Dubins segment (the “selfish push”) into path_tmp.
     void appendDubinsSegment(int o,

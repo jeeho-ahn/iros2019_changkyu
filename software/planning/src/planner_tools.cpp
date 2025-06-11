@@ -21,21 +21,28 @@ bool Planner::findBestDubins(int o,
                              double turning_rad,
                              reloDubinsPath &bestDubins) const
 {
-    std::vector<double> yaws = {
+    std::vector<double> yaws_start = {
         s0->getYaw(),
         s0->getYaw()+M_PI_2,
         s0->getYaw()+M_PI,
         s0->getYaw()+3*M_PI_2
     };
+    std::vector<double> yaws_goal = {
+        s1->getYaw(),
+        s1->getYaw()+M_PI_2,
+        s1->getYaw()+M_PI,
+        s1->getYaw()+3*M_PI_2
+    };
 
     double best_len = std::numeric_limits<double>::infinity();
-    reloDubinsPath cand(0);
+    //reloDubinsPath cand(0);
 
-    for(double y0 : yaws){
+    for(double y0 : yaws_start){
         ReloPush::State ds0(s0->getX(), s0->getY(), y0);
-        for(double y1 : yaws){
+        for(double y1 : yaws_goal){
             ReloPush::State ds1(s1->getX(), s1->getY(), y1);
             auto path = findDubins(ds0, ds1, turning_rad, false);
+
             if(path.omplDubins.length()==std::numeric_limits<double>::max())
                 continue;
             double L = path.lengthCost();
@@ -104,8 +111,9 @@ bool Planner::doClearance(int o,
                           og::PathGeometric &path_tmp)
 {
 
-
+    //auto deb = STATE_OBJECT(state_curr,3)->getYaw();
     // Inject the recorded collision poses into state_curr
+    /*
     for (int c : idxes_collide) {
         auto it = collision_pose.find(c);
         if (it != collision_pose.end()) {
@@ -116,6 +124,7 @@ bool Planner::doClearance(int o,
         }
     }
 
+    */
     // Call clearObstacles with selfish_path
     return clearObstacles(idxes_collide, o, interp, state_curr, path_tmp);
 
@@ -330,7 +339,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
 
 
-
+/*
 bool Planner::doClearance(int o,
                           const std::vector<int> &idxes_collide,
                           const std::unordered_map<int,ReloPush::State> &collision_pose,
@@ -348,7 +357,6 @@ bool Planner::doClearance(int o,
             so->setYaw(it->second.yaw);
         }
     }
-
     // Call clearObstacles with selfish_path
     return clearObstacles(idxes_collide, o, state_curr, selfish_path, path_tmp);
 }
@@ -361,6 +369,9 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              const og::PathGeometric &selfish_path,
                              og::PathGeometric& path_tmp)
 {
+    std::cout << "*debug yaw3-2*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
+
+
     const double clearance_margin = 0.05;    // 5 cm safety buffer
 
     // 1) sampler for clearance starts
@@ -370,6 +381,8 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     std::vector<std::pair<int,ObjectState*>> obstacles;
     for(int oo = 1; oo <= n_objs_; ++oo)
         obstacles.emplace_back(oo, STATE_OBJECT(state_curr, oo));
+
+    std::cout << "*debug yaw3-3*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
     // 3) for each collided object, plan a reverse‐clear path
     for(int c : idxes_collide)
@@ -479,6 +492,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
     return true;
 }
+*/
 /*
 bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,

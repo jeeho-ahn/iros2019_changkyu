@@ -1,2 +1,3 @@
 software/planning/build/
 software/build-*/
+software/planning/CMakeLists.txt.user

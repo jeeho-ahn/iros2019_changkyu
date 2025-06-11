@@ -80,7 +80,6 @@ public:
         OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
         std::vector<ReloPush::State> waypoints(num_pts);
-
         // interpolate dubins path
         // Interpolate dubins path to check for collision on grid map
         //nav_msgs::Path single_path;
@@ -95,12 +94,11 @@ public:
                 ReloPush::State tempState(interState->getX(), interState->getY(),interState->getYaw());
                 waypoints[np] = tempState;
             }
+
         }
-        else{
-            //std::cout << "Path too short to interpolate" << std::endl;
-            waypoints.resize(1);
-            waypoints[0] = targetState;
-        } // path is too short there is nothing to interpolate
+
+        // add goal pose at the end
+        waypoints.push_back(targetState); // todo: convert range to -pi ~ pi ? or convert all others?
 
 
         return std::make_shared<ReloPush::StatePath>(waypoints);

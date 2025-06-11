@@ -1994,6 +1994,8 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
 {
     LOG << "plan started (plrs_jeeho)";
 
+    double turningRad = 1.1;
+
     // prepare permutations
     std::vector<int> order_objs(n_objs_);
     for(int o=1; o<=n_objs_; ++o) order_objs[o-1]=o;
@@ -2012,20 +2014,24 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
             int o = order_objs[i];
             env_.setParamSingleForAll(o, idxes_done, state_curr);
 
-            // debug
-            std::cout << "*debug yaw*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
-
             // 1) find best Dubins
             const ObjectState* s0 = STATE_OBJECT(state_curr,o);
             const ObjectState* s1 = STATE_OBJECT(state_goal,  o);
             reloDubinsPath bestDubins(0);
-            if(!findBestDubins(o, s0, s1, 1.0, bestDubins)){
+            // debug
+            //std::cout << "*debug yaw*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
+            //std::cout << "*debug goal yaw*: " << STATE_OBJECT(state_goal,3)->getYaw() << std::endl;
+            if(!findBestDubins(o, s0, s1, turningRad, bestDubins)){
                 succ = false;
                 break;
             }
+            //debug
+            //if(o==3)
+            //    std::cout << "bd: " << bestDubins.targetState.yaw << std::endl;
 
             // 2) interpolate and make selfish path
             auto interp = bestDubins.interpolate(0.05f);
+            //std::cout << "*debug yaw2*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
             og::PathGeometric selfish_path(si_single4all_);
 
@@ -2036,6 +2042,10 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
               STATE_ROBOT(st0) = o;
               selfish_path.append(st0);
             }
+
+            //std::cout << "*debug yaw2-2*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
+
+
 
             // now step through each waypoint in interp
             for (const auto &wp : *interp)
@@ -2052,11 +2062,13 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
               selfish_path.append(st);
             }
 
+            //auto debug = STATE_OBJECT(state_curr,3)->getYaw() < -1.5;
 
             // 3) record collisions
             std::vector<int> idxes_collide;
             std::unordered_map<int,ReloPush::State> collision_pose;
             recordCollisions(o, interp, state_curr, idxes_collide, collision_pose);
+            std::cout << "*debug yaw3*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
             // 4) clear if needed
             // Clear any collided objects against that same selfish_path
@@ -2067,10 +2079,12 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
                     break;
                 }
             }
+            //std::cout << "*debug yaw4*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
             // 5) append the push segment
             // Finally, append the very same selfish_path into path_tmp
             appendDubinsSegment(o, interp, state_curr, path_tmp);
+            //std::cout << "*debug yaw5*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
             idxes_done.push_back(o);
         }

@@ -322,7 +322,12 @@ public:
         ParamSingleForAll param;        
         param.idx_target = idx_target;
         param.idxes_obs  = idxes_obs;
-        param.state_all  = state_all->as<RobotObjectStateSpace::StateType>();
+        //param.state_all  = state_all->as<RobotObjectStateSpace::StateType>(); //jeeho
+        // Allocate our own copy so that mutations to
+        // the planner’s working state don’t bleed into the “static obstacles.”
+        auto copy = si_all4all_->allocState()->as<RobotObjectStateSpace::StateType>();
+        si_all4all_->copyState(copy, state_all);
+        param.state_all = copy;
         setParamSingleForAll(param);
     }
 
