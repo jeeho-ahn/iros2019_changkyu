@@ -108,7 +108,8 @@ bool Planner::doClearance(int o,
                           const std::unordered_map<int,ReloPush::State> &collision_pose,
                           ob::State *state_curr,
                           const ReloPush::StatePathPtr &interp,  // <<--- interp in
-                          og::PathGeometric &path_tmp)
+                          og::PathGeometric &path_tmp,
+                          double margin = 0.3)
 {
 
     //auto deb = STATE_OBJECT(state_curr,3)->getYaw();
@@ -126,7 +127,7 @@ bool Planner::doClearance(int o,
 
     */
     // Call clearObstacles with selfish_path
-    return clearObstacles(idxes_collide, o, interp, state_curr, path_tmp);
+    return clearObstacles(idxes_collide, o, interp, state_curr, path_tmp, margin);
 
 
 }
@@ -135,7 +136,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,
                              const ReloPush::StatePathPtr &interp,
                              ob::State* state_curr,
-                             og::PathGeometric& path_tmp)
+                             og::PathGeometric& path_tmp, double margin)
 {
     auto param_org = env_.getParamSingleForAll();
 
@@ -171,11 +172,10 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
             // check collision with interp path
             bool collision_with_interp = false;
-            double collision_threshold = 0.3; // set appropriately
             for (const auto &wp : *interp)
             {
                 double dist_to_wp = sqrt(pow(candidate_x - wp.x, 2) + pow(candidate_y - wp.y, 2));
-                if (dist_to_wp < collision_threshold)
+                if (dist_to_wp < margin)
                 {
                     collision_with_interp = true;
                     break;

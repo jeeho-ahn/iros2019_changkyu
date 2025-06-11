@@ -1995,6 +1995,7 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
     LOG << "plan started (plrs_jeeho)";
 
     double turningRad = 1.1;
+    double clearance_margin = 0.3;
 
     // prepare permutations
     std::vector<int> order_objs(n_objs_);
@@ -2067,14 +2068,14 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
             // 3) record collisions
             std::vector<int> idxes_collide;
             std::unordered_map<int,ReloPush::State> collision_pose;
-            recordCollisions(o, interp, state_curr, idxes_collide, collision_pose);
-            std::cout << "*debug yaw3*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
+            recordCollisions(o, interp, state_curr, idxes_collide, collision_pose); //todo: add margin here, too?
+            //std::cout << "*debug yaw3*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
 
             // 4) clear if needed
             // Clear any collided objects against that same selfish_path
             if (!idxes_collide.empty()) {
                 if (!doClearance(o, idxes_collide, collision_pose,
-                                 state_curr, interp, path_tmp)) {
+                                 state_curr, interp, path_tmp, clearance_margin)) {
                     succ = false;
                     break;
                 }
