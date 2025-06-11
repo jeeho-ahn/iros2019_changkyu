@@ -1986,7 +1986,52 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
 
 
 
+bool Planner::plan_plrs_jeeho(const ob::State* start,
+                              const ob::State* goal,
+                              og::PathGeometric &path_res,
+                              std::vector<Action> &actions_res)
+{
+    LOG << "plan started (plrs_jeeho)";
 
+    const double turningRad = 1.1;
+    const double clearance_margin = 0.3;
+
+    // generate object orders
+    std::vector<int> order_objs(n_objs_);
+    std::iota(order_objs.begin(), order_objs.end(), 1);
+
+    ob::State* state_curr = si_all4all_->allocState();
+    og::PathGeometric best_path(si_all4all_);
+
+    // try all permutations until success
+    do {
+        si_all4all_->copyState(state_curr, start);
+        og::PathGeometric path_tmp(si_all4all_);
+        std::vector<int> done_objs;
+
+        if (planSequence(order_objs, start, goal,
+                         state_curr, path_tmp,
+                         turningRad, clearance_margin,
+                         done_objs))
+        {
+            best_path = path_tmp;
+            break;
+        }
+    } while (std::next_permutation(order_objs.begin(), order_objs.end()));
+
+    si_all4all_->freeState(state_curr);
+
+    path_res = best_path;
+    path2Actions(path_res, actions_res);
+    return !path_res.getStateCount() == 0;
+}
+
+
+
+
+
+
+/*
 void Planner::plan_plrs_jeeho(const ob::State* state_start,
                               const ob::State* state_goal,
                               og::PathGeometric &path_res,
@@ -2044,10 +2089,6 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
               selfish_path.append(st0);
             }
 
-            //std::cout << "*debug yaw2-2*: " << STATE_OBJECT(state_curr,3)->getYaw() << std::endl;
-
-
-
             // now step through each waypoint in interp
             for (const auto &wp : *interp)
             {
@@ -2100,8 +2141,7 @@ void Planner::plan_plrs_jeeho(const ob::State* state_start,
     path2Actions(path_res, actions_res);
     si_all4all_->freeState(state_curr);
 }
-
-
+*/
 
 /*
 

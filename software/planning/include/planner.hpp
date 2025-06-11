@@ -66,10 +66,18 @@ public:
                     ompl::geometric::PathGeometric &path_res,
                     std::vector<Action> &actions_res );
 
+    bool plan_plrs_jeeho(const ob::State* start,
+                                  const ob::State* goal,
+                                  og::PathGeometric &path_res,
+                                  std::vector<Action> &actions_res);
+
+
+/*
     void plan_plrs_jeeho(const ompl::base::State *state_start,
                          const ompl::base::State *state_goal,
                          ompl::geometric::PathGeometric &path_res,
                          std::vector<Action> &actions_res);
+                         */
 
     /*
         void plan_kino( const ompl::base::State *state_start,
@@ -218,12 +226,42 @@ private:
                      og::PathGeometric &path_tmp);
     */
 
+
     bool clearObstacles(const std::vector<int>& idxes_collide,
-                                 int o,
-                                 const ReloPush::StatePathPtr& interp,
-                                 ob::State* state_curr,
-                                 og::PathGeometric& path_tmp,
-                                 double margin = 0.3);
+                         int o,
+                         const ReloPush::StatePathPtr& interp,
+                         ob::State* state_curr,
+                         og::PathGeometric& path_tmp,
+                         double margin = 0.3);
+
+
+    bool planSequence(const std::vector<int>& order,
+                        const ob::State* start,
+                        const ob::State* goal,
+                        ob::State* state_curr,
+                        og::PathGeometric& path_tmp,
+                        double turningRad,
+                        double clearance_margin,
+                        std::vector<int>& done_objs);
+
+    bool processObject(int o,
+                        const ob::State* goal,
+                        ob::State* state_curr,
+                        og::PathGeometric& path_tmp,
+                        double turningRad,
+                        double clearance_margin,
+                        const std::vector<int>& done_objs);
+
+    void appendInitialState(int o,
+                             const ob::State* state_curr,
+                             og::PathGeometric& path);
+
+
+    void appendWaypoints(int o,
+                          ReloPush::StatePathPtr interp,
+                          ob::State* state_curr,
+                          og::PathGeometric& path);
+
 
     // implementation of clearance
     /*

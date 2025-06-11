@@ -109,7 +109,7 @@ bool Planner::doClearance(int o,
                           ob::State *state_curr,
                           const ReloPush::StatePathPtr &interp,  // <<--- interp in
                           og::PathGeometric &path_tmp,
-                          double margin = 0.3)
+                          double margin)
 {
 
     //auto deb = STATE_OBJECT(state_curr,3)->getYaw();
@@ -228,6 +228,122 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     env_.setParamSingleForAll(param_org);
     return true;
 }
+
+
+bool Planner::planSequence(const std::vector<int>& order,
+                            const ob::State* start,
+                            const ob::State* goal,
+                            ob::State* state_curr,
+                            og::PathGeometric& path_tmp,
+                            double turningRad,
+                            double clearance_margin,
+                            std::vector<int>& done_objs)
+{
+    for (int o : order) {
+        env_.setParamSingleForAll(o, done_objs, state_curr);
+        if (!processObject(o, goal, state_curr,
+                           path_tmp, turningRad,
+                           clearance_margin, done_objs))
+            return false;
+        done_objs.push_back(o);
+    }
+    return true;
+}
+
+bool Planner::processObject(int o,
+                            const ob::State* goal,
+                            ob::State* state_curr,
+                            og::PathGeometric& path_tmp,
+                            double turningRad,
+                            double clearance_margin,
+                            const std::vector<int>& done_objs)
+{
+    // 1) Compute best Dubins path
+    const ObjectState* s0 = STATE_OBJECT(state_curr, o);
+    const ObjectState* s1 = STATE_OBJECT(goal, o);
+    reloDubinsPath best;
+    if (!findBestDubins(o, s0, s1, turningRad, best))
+        return false;
+
+    // 2) Build selfish path
+    auto interp = best.interpolate(0.05f);
+    og::PathGeometric selfish(si_single4all_);
+    appendInitialState(o, state_curr, selfish);
+    appendWaypoints(o, interp, state_curr, selfish);
+
+    // 3) Collision recording
+    std::vector<int> idxes_collide;
+    std::unordered_map<int, ReloPush::State> collision_pose;
+    recordCollisions(o, interp, state_curr,
+                     idxes_collide, collision_pose);
+
+    // 4) Clearance if needed
+    if (!idxes_collide.empty()) {
+        if (!clearObstacles(idxes_collide, o, interp,
+                            state_curr, path_tmp,
+                            clearance_margin))
+            return false;
+    }
+
+
+    // 5) Append segment to overall path
+    appendDubinsSegment(o, interp, state_curr, path_tmp);
+    return true;
+}
+
+void Planner::appendInitialState(int o,
+                                 const ob::State* state_curr,
+                                 og::PathGeometric& path)
+{
+    ob::State* st0 = si_single4all_->allocState();
+    si_single4all_->copyState(st0, state_curr);
+    STATE_ROBOT(st0) = o;
+    path.append(st0);
+}
+
+void Planner::appendWaypoints(int o,
+                              ReloPush::StatePathPtr interp,
+                              ob::State* state_curr,
+                              og::PathGeometric& path)
+{
+    for (const auto &wp : *interp) {
+        ObjectState* so = STATE_OBJECT(state_curr, o);
+        so->setX(wp.x);
+        so->setY(wp.y);
+        so->setYaw(wp.yaw);
+        ob::State* st = si_single4all_->allocState();
+        si_single4all_->copyState(st, state_curr);
+        path.append(st);
+    }
+}
+
+
+
+//-----------------------------------------------------------------------------
+// 4) appendDubinsSegment
+void Planner::appendDubinsSegment(int o,
+                                  const ReloPush::StatePathPtr &interp,
+                                  ob::State *state_curr,
+                                  og::PathGeometric &path_tmp)
+{
+    // For every waypoint on the selfish Dubins path...
+    for (const auto &wp : *interp)
+    {
+        // 1) set the robot‐index to object o
+        STATE_ROBOT(state_curr) = o;
+
+        // 2) overwrite exactly that object’s pose
+        ObjectState* so = STATE_OBJECT(state_curr, o);
+        so->setX  (wp.x);
+        so->setY  (wp.y);
+        so->setYaw(wp.yaw);
+
+        // 3) append ONLY this new state
+        path_tmp.append(state_curr);
+    }
+}
+
+
 
 
 /*
@@ -808,29 +924,6 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 }
 */
 
-//-----------------------------------------------------------------------------
-// 4) appendDubinsSegment
-void Planner::appendDubinsSegment(int o,
-                                  const ReloPush::StatePathPtr &interp,
-                                  ob::State *state_curr,
-                                  og::PathGeometric &path_tmp)
-{
-    // For every waypoint on the selfish Dubins path...
-    for (const auto &wp : *interp)
-    {
-        // 1) set the robot‐index to object o
-        STATE_ROBOT(state_curr) = o;
-
-        // 2) overwrite exactly that object’s pose
-        ObjectState* so = STATE_OBJECT(state_curr, o);
-        so->setX  (wp.x);
-        so->setY  (wp.y);
-        so->setYaw(wp.yaw);
-
-        // 3) append ONLY this new state
-        path_tmp.append(state_curr);
-    }
-}
 
 /*
 void Planner::appendDubinsSegment(int o,
