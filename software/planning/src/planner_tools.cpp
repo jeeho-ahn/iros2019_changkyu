@@ -405,6 +405,7 @@ bool Planner::planSequence(const std::vector<int>& order,
                             std::vector<int>& done_objs)
 {
     for (int o : order) {
+        std::cout << "1" << std::endl;
         env_.setParamSingleForAll(o, done_objs, state_curr);
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
@@ -443,10 +444,6 @@ bool Planner::processObject(int o,
     recordCollisions(o, bestInterp, state_curr,
                      idxes_collide, collision_pose);
 
-    std::cout << "recC: " << std::endl;
-    for(auto& it: idxes_collide)
-        std::cout << it << std::endl;
-
     // 4) Clearance if needed
     if (!idxes_collide.empty()) {
         if (!clearObstacles(idxes_collide, o, bestInterp,
@@ -465,10 +462,16 @@ void Planner::appendInitialState(int o,
                                  const ob::State* state_curr,
                                  og::PathGeometric& path)
 {
-    ob::State* st0 = si_single4all_->allocState();
-    si_single4all_->copyState(st0, state_curr);
-    STATE_ROBOT(st0) = o;
-    path.append(st0);
+    //ob::State* st0 = si_single4all_->allocState();
+    //si_single4all_->copyState(st0, state_curr);
+    //STATE_ROBOT(st0) = o;
+    //path.append(st0);
+
+    ob::State* st = si_single4all_->allocState();
+    // copy just the o-th ObjectState subspace
+    const ompl::base::State* sub = STATE_OBJECT(state_curr, o);
+    si_single4all_->copyState(st, sub);
+    path.append(st);
 }
 
 void Planner::appendWaypoints(int o,
@@ -481,8 +484,12 @@ void Planner::appendWaypoints(int o,
         so->setX(wp.x);
         so->setY(wp.y);
         so->setYaw(wp.yaw);
+        //ob::State* st = si_single4all_->allocState();
+        //si_single4all_->copyState(st, state_curr);
+        //path.append(st);
         ob::State* st = si_single4all_->allocState();
-        si_single4all_->copyState(st, state_curr);
+        const ompl::base::State* sub = STATE_OBJECT(state_curr, o);
+        si_single4all_->copyState(st, sub);
         path.append(st);
     }
 }

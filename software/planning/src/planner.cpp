@@ -2009,6 +2009,8 @@ bool Planner::plan_plrs_jeeho(const ob::State* start,
         og::PathGeometric path_tmp(si_all4all_);
         std::vector<int> done_objs;
 
+        std::cout << "preplan" << std::endl;
+
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
                          turningRad, clearance_margin,
@@ -2017,11 +2019,15 @@ bool Planner::plan_plrs_jeeho(const ob::State* start,
             best_path = path_tmp;
             break;
         }
+        std::cout << "postplan" << std::endl;
     } while (std::next_permutation(order_objs.begin(), order_objs.end()));
 
     si_all4all_->freeState(state_curr);
 
     path_res = best_path;
+    // check if the path is empty (failed)
+    if(path_res.getStateCount()==0)
+        std::cout << "No solution" << std::endl;
     path2Actions(path_res, actions_res);
     return !path_res.getStateCount() == 0;
 }
