@@ -132,6 +132,8 @@ bool Planner::doClearance(int o,
 
 }
 
+
+/*
 bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,
                              const ReloPush::StatePathPtr &interp,
@@ -228,7 +230,133 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     env_.setParamSingleForAll(param_org);
     return true;
 }
+*/
 
+bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
+                             int o,
+                             const ReloPush::StatePathPtr &interp,
+                             ob::State* state_curr,
+                             og::PathGeometric& path_tmp,
+                             double margin)
+{
+    // save & restore original environment params
+    auto param_org = env_.getParamSingleForAll();
+
+    // parameters for sampling
+    const double step_size = 0.05;  // 5 cm increments
+    const int    max_steps = 40;    // up to 2 m
+
+    // allocate a scratch state for validity checks
+    ob::State* scratch = si_single4clear_->allocState();
+    auto* so_scratch = scratch->as<ObjectState>();
+
+    for (int c : idxes_collide)
+    {
+        // 1) record the collided object’s current pose
+        ObjectState* state_c = STATE_OBJECT(state_curr, c);
+        const double x0   = state_c->getX();
+        const double y0   = state_c->getY();
+        const double yaw0 = state_c->getYaw();
+
+        // 2) four candidate push directions: forward, right, backward, left
+        std::array<double,4> dirs = {
+            yaw0,
+            yaw0 + M_PI/2.0,
+            yaw0 + M_PI,
+            yaw0 + 3.0*M_PI/2.0
+        };
+
+        // 3) scan each direction to find the FIRST valid clearance start,
+        //    then pick the one with the smallest distance
+        double bestDist = std::numeric_limits<double>::infinity();
+        double bestDir  = 0.0;
+
+        for (double dir : dirs)
+        {
+            for (int step = 1; step <= max_steps; ++step)
+            {
+                double dist = step * step_size;
+                double cx   = x0 + dist * std::cos(dir);
+                double cy   = y0 + dist * std::sin(dir);
+
+                // set scratch to candidate pose
+                so_scratch->setX(cx);
+                so_scratch->setY(cy);
+                so_scratch->setYaw(dir);
+
+                // bounds & environment validity
+                if (!si_single4clear_->getStateSpace()->satisfiesBounds(scratch))
+                    continue;
+                if (!si_single4clear_->isValid(scratch))
+                    continue;
+
+                // avoid colliding with the interpolation path
+                bool collide_interp = false;
+                for (auto& wp : *interp)
+                {
+                    double dx = cx - wp.x;
+                    double dy = cy - wp.y;
+                    if (dx*dx + dy*dy < margin*margin)
+                    {
+                        collide_interp = true;
+                        break;
+                    }
+                }
+                if (collide_interp)
+                    continue;
+
+                // first valid for this direction → consider it
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestDir  = dir;
+                }
+                break;  // stop scanning further along this dir
+            }
+        }
+
+        // if no direction was valid, bail out
+        if (!std::isfinite(bestDist))
+        {
+            si_single4clear_->freeState(scratch);
+            env_.setParamSingleForAll(param_org);
+            return false;
+        }
+
+        // 4) build a straight‐line clearance path along bestDir
+        //    reset object to its original collision pose
+        state_c->setX(x0);
+        state_c->setY(y0);
+        state_c->setYaw(yaw0);
+
+        // tag which object the robot is “pushing”
+        STATE_ROBOT(state_curr) = c;
+
+        // 4a) append the collision pose itself
+        path_tmp.append(state_curr);
+
+        // 4b) interpolate in step_size increments away from the collision
+        int n_steps = static_cast<int>(std::floor(bestDist / step_size));
+        for (int i = 1; i <= n_steps; ++i)
+        {
+            double di = i * step_size;
+            double xi = x0 + di * std::cos(bestDir);
+            double yi = y0 + di * std::sin(bestDir);
+
+            auto* so = STATE_OBJECT(state_curr, c);
+            so->setX(xi);
+            so->setY(yi);
+            so->setYaw(bestDir);
+
+            path_tmp.append(state_curr);
+        }
+    }
+
+    // clean up & restore params
+    si_single4clear_->freeState(scratch);
+    env_.setParamSingleForAll(param_org);
+    return true;
+}
 
 bool Planner::planSequence(const std::vector<int>& order,
                             const ob::State* start,

@@ -1993,7 +1993,7 @@ bool Planner::plan_plrs_jeeho(const ob::State* start,
 {
     LOG << "plan started (plrs_jeeho)";
 
-    const double turningRad = 1.1;
+    const double turningRad = 1.41;
     const double clearance_margin = 0.3;
 
     // generate object orders
