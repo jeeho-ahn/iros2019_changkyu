@@ -19,47 +19,84 @@ bool Planner::findBestDubins(int o,
                              const ObjectState* s0,
                              const ObjectState* s1,
                              double turning_rad,
-                             reloDubinsPath &bestDubins) const
+                             reloDubinsPath &bestDubins,
+                             ReloPush::StatePathPtr& bestInterp,
+                             double interpResolution) const
 {
+    // 1) Precompute the 4×4 yaw combinations
     std::vector<double> yaws_start = {
         s0->getYaw(),
-        s0->getYaw()+M_PI_2,
-        s0->getYaw()+M_PI,
-        s0->getYaw()+3*M_PI_2
+        s0->getYaw() + M_PI_2,
+        s0->getYaw() + M_PI,
+        s0->getYaw() + 3.0*M_PI_2
     };
     std::vector<double> yaws_goal = {
         s1->getYaw(),
-        s1->getYaw()+M_PI_2,
-        s1->getYaw()+M_PI,
-        s1->getYaw()+3*M_PI_2
+        s1->getYaw() + M_PI_2,
+        s1->getYaw() + M_PI,
+        s1->getYaw() + 3.0*M_PI_2
     };
 
+    // 2) Grab your workspace bounds (assumes env_.getWorkspaceBounds())
+    //    Adjust to match your actual member or getter.
+
+    const double xmin = 0, xmax = 4;  //todo: parse it from env settings
+    const double ymin = 0, ymax = 5.2;
+
     double best_len = std::numeric_limits<double>::infinity();
-    //reloDubinsPath cand(0);
+    bool foundAny = false;
 
-    for(double y0 : yaws_start){
+    // 3) Loop over all yaw-start / yaw-goal combos
+    for (double y0 : yaws_start)
+    {
         ReloPush::State ds0(s0->getX(), s0->getY(), y0);
-        for(double y1 : yaws_goal){
+        for (double y1 : yaws_goal)
+        {
             ReloPush::State ds1(s1->getX(), s1->getY(), y1);
-            auto path = findDubins(ds0, ds1, turning_rad, false);
+            auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
 
-            if(path.omplDubins.length()==std::numeric_limits<double>::max())
+            // skip invalid Dubins (infinite-length)
+            if (candidate.omplDubins.length() == std::numeric_limits<double>::max())
                 continue;
-            double L = path.lengthCost();
-            if(L < best_len){
-                best_len   = L;
-                bestDubins = path;
+
+            // 4) Interpolate at the requested resolution
+            auto interp = candidate.interpolate(interpResolution);
+
+            // 5) Reject if any interpolated pose leaves the workspace
+            bool inside = true;
+            for (const auto st : *interp)
+            {
+                double x = st.x;
+                double y = st.y;
+                if (x < xmin || x > xmax || y < ymin || y > ymax)
+                {
+                    inside = false;
+                    break;
+                }
+            }
+            if (!inside)
+                continue;
+
+            // 6) Score by path length and keep the best
+            double L = candidate.lengthCost();
+            if (L < best_len)
+            {
+                best_len    = L;
+                bestDubins  = candidate;
+                bestInterp  = interp;
+                foundAny    = true;
             }
         }
     }
-    return best_len < std::numeric_limits<double>::infinity();
+
+    return foundAny;
 }
 
 //-----------------------------------------------------------------------------
 // 2) recordCollisions
 void Planner::recordCollisions(int o,
                                const ReloPush::StatePathPtr &interp,
-                               ob::State *state_curr,                        // ← now provided
+                               ob::State *state_curr,
                                std::vector<int> &idxes_collide,
                                std::unordered_map<int,ReloPush::State> &collision_pose)
 {
@@ -390,24 +427,29 @@ bool Planner::processObject(int o,
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);
     const ObjectState* s1 = STATE_OBJECT(goal, o);
     reloDubinsPath best;
-    if (!findBestDubins(o, s0, s1, turningRad, best))
+    ReloPush::StatePathPtr bestInterp(new ReloPush::StatePath);
+    if (!findBestDubins(o, s0, s1, turningRad, best, bestInterp))
         return false;
 
     // 2) Build selfish path
-    auto interp = best.interpolate(0.05f);
+    //auto interp = best.interpolate(0.05f);
     og::PathGeometric selfish(si_single4all_);
     appendInitialState(o, state_curr, selfish);
-    appendWaypoints(o, interp, state_curr, selfish);
+    appendWaypoints(o, bestInterp, state_curr, selfish);
 
     // 3) Collision recording
     std::vector<int> idxes_collide;
     std::unordered_map<int, ReloPush::State> collision_pose;
-    recordCollisions(o, interp, state_curr,
+    recordCollisions(o, bestInterp, state_curr,
                      idxes_collide, collision_pose);
+
+    std::cout << "recC: " << std::endl;
+    for(auto& it: idxes_collide)
+        std::cout << it << std::endl;
 
     // 4) Clearance if needed
     if (!idxes_collide.empty()) {
-        if (!clearObstacles(idxes_collide, o, interp,
+        if (!clearObstacles(idxes_collide, o, bestInterp,
                             state_curr, path_tmp,
                             clearance_margin))
             return false;
@@ -415,7 +457,7 @@ bool Planner::processObject(int o,
 
 
     // 5) Append segment to overall path
-    appendDubinsSegment(o, interp, state_curr, path_tmp);
+    appendDubinsSegment(o, bestInterp, state_curr, path_tmp);
     return true;
 }
 

@@ -198,12 +198,14 @@ private:
                         const ObjectState* s0,
                         const ObjectState* s1,
                         double turning_rad,
-                        reloDubinsPath &bestDubins) const;
+                        reloDubinsPath &bestDubins,
+                        ReloPush::StatePathPtr& bestInterp,
+                        double interpResolution = 0.05) const;
 
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
                           const ReloPush::StatePathPtr &interp,
-                          ob::State *state_curr,                      // ← added
+                          ob::State *state_curr,
                           std::vector<int> &idxes_collide,
                           std::unordered_map<int,ReloPush::State> &collision_pose);
 
