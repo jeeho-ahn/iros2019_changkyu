@@ -72,18 +72,18 @@ struct PlanningContext
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in) : parameters(params_in), mo_list(obs_in), delivered_list(static_in)
     {
         std::unordered_set<ReloPush::State> obs;
-        env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
-        env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
+        env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, params_in.turning_rad_pair.push, params_in.LF_push, false); //todo: params:: -> parameters
+        env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, params_in.turning_rad_pair.non_push, params_in.LF_nonpush, true);
 
-        parameters.turning_rad_pair.push = Constants::r_push;
-        parameters.turning_rad_pair.non_push = Constants::r_nonpush;
+        //parameters.turning_rad_pair.push = Constants::r_push;
+        //parameters.turning_rad_pair.non_push = Constants::r_nonpush;
 
-        parameters.map_resolution = Constants::mapResolution;
-        parameters.car_width = Constants::carWidth;
-        parameters.obs_rad = Constants::obsRadius;
-        parameters.LF_push = Constants::LF_push;
-        parameters.LF_nonpush = Constants::LF_nonpush;
-        parameters.LB = Constants::LB;
+        //parameters.map_resolution = Constants::mapResolution;
+        //parameters.car_width = Constants::carWidth;
+        //parameters.obs_rad = Constants::obsRadius;
+        //parameters.LF_push = Constants::LF_push;
+        //parameters.LF_nonpush = Constants::LF_nonpush;
+        //parameters.LB = Constants::LB;
 
         updateObs(mo_list, delivered_list);
         //uniformSampleMap(sample_N);

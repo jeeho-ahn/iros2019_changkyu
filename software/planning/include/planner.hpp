@@ -69,7 +69,8 @@ public:
     bool plan_plrs_jeeho(const ob::State* start,
                                   const ob::State* goal,
                                   og::PathGeometric &path_res,
-                                  std::vector<Action> &actions_res);
+                                  std::vector<Action> &actions_res,
+                                  PlanningContext& planCtx);
 
 
 /*
@@ -236,23 +237,24 @@ private:
                          og::PathGeometric& path_tmp,
                          double margin = 0.3);
 
-
-    bool planSequence(const std::vector<int>& order,
-                        const ob::State* start,
-                        const ob::State* goal,
-                        ob::State* state_curr,
-                        og::PathGeometric& path_tmp,
-                        double turningRad,
-                        double clearance_margin,
-                        std::vector<int>& done_objs);
+    bool planSequence(const std::vector<int> &order,
+                      const ob::State *start,
+                      const ob::State *goal,
+                      ob::State *state_curr,
+                      og::PathGeometric &path_tmp,
+                      double turningRad,
+                      double clearance_margin,
+                      std::vector<int> &done_objs,
+                      PlanningContext &planCtx);
 
     bool processObject(int o,
-                        const ob::State* goal,
-                        ob::State* state_curr,
-                        og::PathGeometric& path_tmp,
-                        double turningRad,
-                        double clearance_margin,
-                        const std::vector<int>& done_objs);
+                       const ob::State *goal,
+                       ob::State *state_curr,
+                       og::PathGeometric &path_tmp,
+                       double turningRad,
+                       double clearance_margin,
+                       const std::vector<int> &done_objs,
+                       PlanningContext &planCtx);
 
     void appendInitialState(int o,
                              const ob::State* state_curr,

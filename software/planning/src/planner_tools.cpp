@@ -395,21 +395,22 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     return true;
 }
 
-bool Planner::planSequence(const std::vector<int>& order,
-                            const ob::State* start,
-                            const ob::State* goal,
-                            ob::State* state_curr,
-                            og::PathGeometric& path_tmp,
-                            double turningRad,
-                            double clearance_margin,
-                            std::vector<int>& done_objs)
+bool Planner::planSequence(const std::vector<int> &order,
+                           const ob::State *start,
+                           const ob::State *goal,
+                           ob::State *state_curr,
+                           og::PathGeometric &path_tmp,
+                           double turningRad,
+                           double clearance_margin,
+                           std::vector<int> &done_objs,
+                           PlanningContext &planCtx)
 {
     for (int o : order) {
         std::cout << "1" << std::endl;
         env_.setParamSingleForAll(o, done_objs, state_curr);
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
-                           clearance_margin, done_objs))
+                           clearance_margin, done_objs, planCtx))
             return false;
         done_objs.push_back(o);
     }
@@ -417,12 +418,13 @@ bool Planner::planSequence(const std::vector<int>& order,
 }
 
 bool Planner::processObject(int o,
-                            const ob::State* goal,
-                            ob::State* state_curr,
-                            og::PathGeometric& path_tmp,
+                            const ob::State *goal,
+                            ob::State *state_curr,
+                            og::PathGeometric &path_tmp,
                             double turningRad,
                             double clearance_margin,
-                            const std::vector<int>& done_objs)
+                            const std::vector<int> &done_objs,
+                            PlanningContext &planCtx)
 {
     // 1) Compute best Dubins path
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);

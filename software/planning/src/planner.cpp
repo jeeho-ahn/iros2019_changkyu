@@ -1984,17 +1984,16 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
     si_single4all_->freeState(state_curr);
 }
 
-
-
-bool Planner::plan_plrs_jeeho(const ob::State* start,
-                              const ob::State* goal,
+bool Planner::plan_plrs_jeeho(const ob::State *start,
+                              const ob::State *goal,
                               og::PathGeometric &path_res,
-                              std::vector<Action> &actions_res)
+                              std::vector<Action> &actions_res,
+                              PlanningContext &planCtx)
 {
     LOG << "plan started (plrs_jeeho)";
 
-    const double turningRad = 1.41;
-    const double clearance_margin = 0.3;
+    const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
+    const double clearance_margin = planCtx.parameters.obs_rad;
 
     // generate object orders
     std::vector<int> order_objs(n_objs_);
@@ -2009,17 +2008,17 @@ bool Planner::plan_plrs_jeeho(const ob::State* start,
         og::PathGeometric path_tmp(si_all4all_);
         std::vector<int> done_objs;
 
-        std::cout << "preplan" << std::endl;
+        //std::cout << "preplan" << std::endl;
 
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
                          turningRad, clearance_margin,
-                         done_objs))
+                         done_objs, planCtx))
         {
             best_path = path_tmp;
             break;
         }
-        std::cout << "postplan" << std::endl;
+        //std::cout << "postplan" << std::endl;
     } while (std::next_permutation(order_objs.begin(), order_objs.end()));
 
     si_all4all_->freeState(state_curr);
