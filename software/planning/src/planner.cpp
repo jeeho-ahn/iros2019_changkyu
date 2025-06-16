@@ -235,6 +235,15 @@ private:
     typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
 };
 
+
+
+
+Planner::Planner(RobotObjectSetup &env, std::vector<RobotObjectSetup::Object> defs) : Planner(env)
+{
+    // jeeho
+    defs_ = std::move(defs);
+}
+
 Planner::Planner(RobotObjectSetup &env)
  : env_(env),
    objects_(env.getObjects()),
@@ -1987,13 +1996,9 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
 bool Planner::plan_plrs_jeeho(const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
-                              std::vector<Action> &actions_res,
-                              PlanningContext &planCtx)
+                              std::vector<Action> &actions_res)
 {
     LOG << "plan started (plrs_jeeho)";
-
-    const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
-    const double clearance_margin = planCtx.parameters.obs_rad;
 
     // generate object orders
     std::vector<int> order_objs(n_objs_);
@@ -2009,11 +2014,9 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
         std::vector<int> done_objs;
 
         //std::cout << "preplan" << std::endl;
-
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
-                         turningRad, clearance_margin,
-                         done_objs, planCtx))
+                         done_objs))
         {
             best_path = path_tmp;
             break;

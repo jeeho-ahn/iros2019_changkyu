@@ -21,7 +21,10 @@ bool Planner::findBestDubins(int o,
                              double turning_rad,
                              reloDubinsPath &bestDubins,
                              ReloPush::StatePathPtr& bestInterp,
-                             double interpResolution) const
+                             double interpResolution,
+                             PlanningContext &planCtx,
+                             ReloPush::State& transit_start,
+                             std::vector<ReloPush::StatePathPtr> transit_paths) const
 {
     // 1) Precompute the 4×4 yaw combinations
     std::vector<double> yaws_start = {
@@ -53,6 +56,18 @@ bool Planner::findBestDubins(int o,
         for (double y1 : yaws_goal)
         {
             ReloPush::State ds1(s1->getX(), s1->getY(), y1);
+            // check if this pose is accessable
+            auto ds0_prepush = ReloPush::find_pre_push(ds0,(planCtx.parameters.LF_push+planCtx.parameters.obs_rad)*1.01);
+            auto ph = planHybridAstar(transit_start,ds0_prepush,planCtx,true);
+            if(ph->validity!=PlanValidity::success)
+            {
+               // approach failed
+               continue;
+            }
+
+            // store transit path to the object
+            transit_paths.push_back(ph->getPathPtr(true));
+
             auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
 
             // skip invalid Dubins (infinite-length)
@@ -395,23 +410,97 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     return true;
 }
 
+//------------------------------------------------------------------------------
+/**
+ * Given the original object definitions and the two loaded OMPL states,
+ * populate `objectMap` and `goalMap` keyed by a unique string for each object.
+ */
+static void populateMaps(
+    const std::vector<RobotObjectSetup::Object> &defs,
+    const ompl::base::State *state_init,
+    const ompl::base::State *state_goal,
+    ObjectMap &objectMap,
+    GoalMap &goalMap)
+{
+    // defs.size() == number of objects
+    for (size_t idx = 0; idx < defs.size(); ++idx)
+    {
+        int o = int(idx) + 1;        // 1-based index in STATE_OBJECT
+        const auto &def = defs[idx]; // your RobotObjectSetup::Object
+
+        // fetch the OMPL object‐state wrappers
+        auto *si = STATE_OBJECT(state_init, o);
+        auto *sg = STATE_OBJECT(state_goal, o);
+
+        // build a key (you can pick any scheme you like)
+        std::string key = def.name + "_" + std::to_string(o);
+
+        // fill ObjectInfo from the init‐state
+        ObjectInfo oi(
+            def.name,            // name
+            si->getX(),          // x
+            si->getY(),          // y
+            si->getYaw(),        // nominalOrientation
+            /*numberOfSides=*/4, // or pull from def if you store it there
+            def.radius           // enclosingRadius
+        );
+        objectMap.emplace(key, std::move(oi));
+
+        // fill GoalInfo from the goal‐state
+        GoalInfo gi(
+            def.name,            // name
+            sg->getX(),          // x
+            sg->getY(),          // y
+            sg->getYaw(),        // nominalOrientation
+            /*numberOfSides=*/4, // same as above
+            def.radius           // enclosingRadius
+        );
+        goalMap.emplace(key, std::move(gi));
+    }
+}
+
 bool Planner::planSequence(const std::vector<int> &order,
                            const ob::State *start,
                            const ob::State *goal,
                            ob::State *state_curr,
                            og::PathGeometric &path_tmp,
-                           double turningRad,
-                           double clearance_margin,
-                           std::vector<int> &done_objs,
-                           PlanningContext &planCtx)
+                           std::vector<int> &done_objs)
 {
+    std::vector<ReloPush::State> arrival_poses(0);
+    std::vector<ReloPush::StatePathPtr> transit_paths(0);
     for (int o : order) {
-        std::cout << "1" << std::endl;
         env_.setParamSingleForAll(o, done_objs, state_curr);
+        // create planning context (update delivered objs) for hybrid astar
+        WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
+        std::unordered_map<std::string, ObjectInfo> objects_relopush;
+        std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
+
+        std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
+        PlanningParameters params(1.41,0.8,0.1,0.3,0.15,0.54,0.3,0.2);
+        params.setBoundary(boundary);
+
+        populateMaps(defs_, start, goal, objects_relopush, goals_relopush);
+        PlanningContext planCtx(params, objects_relopush, delivered_objs); //todo: delivered_objs is currently staying empty
+
+        const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
+        const double clearance_margin = planCtx.parameters.obs_rad;
+
+
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
-                           clearance_margin, done_objs, planCtx))
-            return false;
+                           clearance_margin, done_objs, planCtx, arrival_poses, transit_paths))
+        {
+            std::cout << "[";
+            for(auto it : order)
+            {
+                std::cout << it << ",";
+            }
+
+            std::cout << "] failed at " << o << ". Trying next permutation" << std::endl;
+            return false; // current sequence has no solution. try different permutation
+        }
+
+        // Add object in done list
         done_objs.push_back(o);
     }
     return true;
@@ -424,29 +513,39 @@ bool Planner::processObject(int o,
                             double turningRad,
                             double clearance_margin,
                             const std::vector<int> &done_objs,
-                            PlanningContext &planCtx)
+                            PlanningContext &planCtx,
+                            std::vector<ReloPush::State>& arrival_poses,
+                            std::vector<ReloPush::StatePathPtr> transit_paths)
 {
-    // 1) Compute best Dubins path
+    // Compute best Dubins path
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);
     const ObjectState* s1 = STATE_OBJECT(goal, o);
     reloDubinsPath best;
     ReloPush::StatePathPtr bestInterp(new ReloPush::StatePath);
-    if (!findBestDubins(o, s0, s1, turningRad, best, bestInterp))
+    ReloPush::State transit_start;
+    if(!arrival_poses.size()==0)
+        transit_start = ReloPush::find_pre_push(arrival_poses.back(),planCtx.parameters.LF_push*1.01);
+    else {
+        // todo: parse from context
+        transit_start = ReloPush::State(0.1,0.1,0.2);
+    }
+
+    if (!findBestDubins(o, s0, s1, turningRad, best, bestInterp, planCtx.parameters.map_resolution, planCtx, transit_start, transit_paths)) // accessable and in-boundary
         return false;
 
-    // 2) Build selfish path
+    // Build selfish path
     //auto interp = best.interpolate(0.05f);
     og::PathGeometric selfish(si_single4all_);
     appendInitialState(o, state_curr, selfish);
     appendWaypoints(o, bestInterp, state_curr, selfish);
 
-    // 3) Collision recording
+    // Collision recording
     std::vector<int> idxes_collide;
     std::unordered_map<int, ReloPush::State> collision_pose;
     recordCollisions(o, bestInterp, state_curr,
                      idxes_collide, collision_pose);
 
-    // 4) Clearance if needed
+    // Clearance if needed
     if (!idxes_collide.empty()) {
         if (!clearObstacles(idxes_collide, o, bestInterp,
                             state_curr, path_tmp,
@@ -455,8 +554,12 @@ bool Planner::processObject(int o,
     }
 
 
-    // 5) Append segment to overall path
+    // Append segment to overall path
     appendDubinsSegment(o, bestInterp, state_curr, path_tmp);
+    // Add arrival pose of this object
+    arrival_poses.push_back(best.targetState);
+
+
     return true;
 }
 

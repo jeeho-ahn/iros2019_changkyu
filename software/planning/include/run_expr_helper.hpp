@@ -153,8 +153,7 @@ static void runChosenPlanner(const std::string &plannerName,
                              ompl::base::State *sg,
                              og::PathGeometric &path,
                              std::vector<Planner::Action> &actions,
-                             bool do_merge,
-                             PlanningContext& planCtx)
+                             bool do_merge)
 {
     if (plannerName.rfind("ours", 0) == 0)
     {
@@ -162,7 +161,7 @@ static void runChosenPlanner(const std::string &plannerName,
     }
     else if (plannerName == "plrs")
     {
-        planner.plan_plrs_jeeho(si, sg, path, actions, planCtx);
+        planner.plan_plrs_jeeho(si, sg, path, actions);
     }
     else if (plannerName == "kino")
     {
@@ -249,54 +248,7 @@ allocateAndLoad(RobotObjectSetup *env,
     return {s_init, s_goal};
 }
 
-//------------------------------------------------------------------------------
-/**
- * Given the original object definitions and the two loaded OMPL states,
- * populate `objectMap` and `goalMap` keyed by a unique string for each object.
- */
-static void populateMaps(
-    const std::vector<RobotObjectSetup::Object> &defs,
-    ompl::base::State *state_init,
-    ompl::base::State *state_goal,
-    ObjectMap &objectMap,
-    GoalMap &goalMap)
-{
-    // defs.size() == number of objects
-    for (size_t idx = 0; idx < defs.size(); ++idx)
-    {
-        int o = int(idx) + 1;        // 1-based index in STATE_OBJECT
-        const auto &def = defs[idx]; // your RobotObjectSetup::Object
 
-        // fetch the OMPL object‐state wrappers
-        auto *si = STATE_OBJECT(state_init, o);
-        auto *sg = STATE_OBJECT(state_goal, o);
-
-        // build a key (you can pick any scheme you like)
-        std::string key = def.name + "_" + std::to_string(o);
-
-        // fill ObjectInfo from the init‐state
-        ObjectInfo oi(
-            def.name,            // name
-            si->getX(),          // x
-            si->getY(),          // y
-            si->getYaw(),        // nominalOrientation
-            /*numberOfSides=*/4, // or pull from def if you store it there
-            def.radius           // enclosingRadius
-        );
-        objectMap.emplace(key, std::move(oi));
-
-        // fill GoalInfo from the goal‐state
-        GoalInfo gi(
-            def.name,            // name
-            sg->getX(),          // x
-            sg->getY(),          // y
-            sg->getYaw(),        // nominalOrientation
-            /*numberOfSides=*/4, // same as above
-            def.radius           // enclosingRadius
-        );
-        goalMap.emplace(key, std::move(gi));
-    }
-}
 
 //------------------------------------------------------------------------------
 // Run planning for each object‐count in 'ns'
@@ -344,14 +296,6 @@ static void runObjectLoop(
         // 4) allocate & load states
         auto [state_init, state_goal] = allocateAndLoad(env.get(), fp_init, fp_goal, n_objs);
 
-        // create planning ctx for hybrid astar
-        WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
-        std::unordered_map<std::string, ObjectInfo> objects_relopush;
-        std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
-        std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
-        PlanningParameters params(1.41,0.8,0.1,0.3,0.15,0.54,0.3,0.2);
-        populateMaps(objects, state_init, state_goal, objects_relopush, goals_relopush);
-        PlanningContext planCtx(params, objects_relopush, delivered_objs); //todo: delivered_objs is currently staying empty
 
         // 5) special bluebox rematch
         if (name_experiment == "bluebox_kuka" ||
@@ -363,14 +307,14 @@ static void runObjectLoop(
         // 6) plan
         og::PathGeometric path(env->getAllForAllSpaceInformation());
         std::vector<Planner::Action> actions;
-        Planner planner(*env);
+        Planner planner(*env, std::move(objects));
         clock_t t0 = clock();
         runChosenPlanner(
             name_planner,
             planner,
             state_init, state_goal,
             path, actions,
-            do_merge, planCtx);
+            do_merge);
         double elapsed = double(clock() - t0) / CLOCKS_PER_SEC;
 
         // 7) save + report

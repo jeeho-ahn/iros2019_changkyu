@@ -12,6 +12,8 @@
 #include "mdp_planner.hpp"
 
 #include <fromReloPush/DubinsTools.h>
+#include <fromReloPush/pre_post_push_pose.hpp>
+#include <fromReloPush/PlanHybridAstar.hpp>
 #include <cmath>  //  std::tan, std::sqrt
 #include <limits> //  std::numeric_limits
 
@@ -21,6 +23,7 @@ class Planner
 {
 public:
     Planner(RobotObjectSetup &env);
+    Planner(RobotObjectSetup &env, std::vector<RobotObjectSetup::Object> defs); // jeeho
     ~Planner();
 
     enum TYPE_ACTION
@@ -69,8 +72,7 @@ public:
     bool plan_plrs_jeeho(const ob::State* start,
                                   const ob::State* goal,
                                   og::PathGeometric &path_res,
-                                  std::vector<Action> &actions_res,
-                                  PlanningContext& planCtx);
+                                  std::vector<Action> &actions_res);
 
 
 /*
@@ -201,7 +203,10 @@ private:
                         double turning_rad,
                         reloDubinsPath &bestDubins,
                         ReloPush::StatePathPtr& bestInterp,
-                        double interpResolution = 0.05) const;
+                        double interpResolution,
+                        PlanningContext &planCtx,
+                        ReloPush::State& transit_start,
+                        std::vector<ReloPush::StatePathPtr> transit_paths) const;
 
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
@@ -242,10 +247,7 @@ private:
                       const ob::State *goal,
                       ob::State *state_curr,
                       og::PathGeometric &path_tmp,
-                      double turningRad,
-                      double clearance_margin,
-                      std::vector<int> &done_objs,
-                      PlanningContext &planCtx);
+                      std::vector<int> &done_objs);
 
     bool processObject(int o,
                        const ob::State *goal,
@@ -254,7 +256,9 @@ private:
                        double turningRad,
                        double clearance_margin,
                        const std::vector<int> &done_objs,
-                       PlanningContext &planCtx);
+                       PlanningContext &planCtx,
+                       std::vector<ReloPush::State>& arrival_poses,
+                       std::vector<ReloPush::StatePathPtr> transit_paths);
 
     void appendInitialState(int o,
                              const ob::State* state_curr,
@@ -283,6 +287,7 @@ private:
                              og::PathGeometric &path_tmp);
 
     RobotObjectSetup &env_;
+    std::vector<RobotObjectSetup::Object> defs_; // jeeho
     ompl::base::SpaceInformationPtr si_single_;
     ompl::base::SpaceInformationPtr si_single4all_;
     ompl::base::SpaceInformationPtr si_single4clear_;

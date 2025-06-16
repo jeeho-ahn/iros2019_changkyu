@@ -57,6 +57,11 @@ struct PlanningParameters
         turning_rad_pair.push = r_push;
         turning_rad_pair.non_push = r_nonpush;
     }
+
+    void setBoundary(WorkspaceBoundary& boundary_in)
+    {
+        boundary=boundary_in;
+    }
 };
 
 namespace params
