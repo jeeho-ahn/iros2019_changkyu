@@ -2101,11 +2101,19 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
     // check if the path is empty (failed)
     if(path_res.getStateCount()==0)
         std::cout << "No solution" << std::endl;
+    else
+    {
+        std::cout << "\nFinished Planning: ";
+        for(auto it : order_objs)
+            std::cout << it << "->";
+
+        std::cout << "done" << std::endl;
+    }
     
     //path2Actions(path_res, actions_res);
     path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
 
-        return !path_res.getStateCount() == 0;
+    return !path_res.getStateCount() == 0;
 }
 
 

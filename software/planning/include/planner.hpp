@@ -202,7 +202,8 @@ private:
 
 
     // Pick the shortest Dubins path over 4×4 start/goal yaws.
-    bool findBestDubins(int o,
+
+    /*bool findBestDubins(int o,
                         const ObjectState* s0,
                         const ObjectState* s1,
                         double turning_rad,
@@ -212,7 +213,18 @@ private:
                         PlanningContext &planCtx,
                         ReloPush::State& transit_start,
                         std::vector<ReloPush::StatePathPtr>& transit_paths) const;
+                        */
 
+    bool findBestDubins(int o,
+                        const ReloPush::State s0,
+                        const ReloPush::State s1,
+                        double turning_rad,
+                        reloDubinsPath &bestDubins,
+                        ReloPush::StatePathPtr &bestInterp,
+                        double interpResolution,
+                        const std::vector<std::pair<int,int>> &excludedIndices,
+                        int &chosen_i,
+                        int &chosen_j) const;
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
                           const ReloPush::StatePathPtr &interp,
@@ -221,6 +233,7 @@ private:
                           std::unordered_map<int,ReloPush::State> &collision_pose);
 
     // Use interp directly for clearance collision checks.
+    /*
     bool doClearance(int o,
                      const std::vector<int> &idxes_collide,
                      const std::unordered_map<int,ReloPush::State> &collision_pose,
@@ -228,7 +241,7 @@ private:
                      const ReloPush::StatePathPtr &interp,  // <<--- pass interp
                      og::PathGeometric &path_tmp,
                      double margin = 0.3);
-
+*/
     // Inject the recorded collision poses and clear them.
     /*
     bool doClearance(int o,
@@ -246,6 +259,15 @@ private:
                          ob::State* state_curr,
                          og::PathGeometric& path_tmp,
                          double margin = 0.3);
+
+//    bool clearObstacles(const std::vector<int>& idxes_collide,
+//                                 int o,
+//                                 const ReloPush::StatePathPtr &interp,
+//                                 const ReloPush::State &transit_start,
+//                                 ob::State* state_curr,
+//                                 og::PathGeometric& path_tmp,
+//                                 std::vector<ReloPush::StatePathPtr> &newTransits,
+//                                 double margin, PlanningContext& planCtx);
 
     bool planSequence(const std::vector<int> &order,
                       const ob::State *start,

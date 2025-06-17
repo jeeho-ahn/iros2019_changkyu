@@ -15,6 +15,9 @@
 
 //-----------------------------------------------------------------------------
 // 1) findBestDubins
+
+
+/*
 bool Planner::findBestDubins(int o,
                              const ObjectState* s0,
                              const ObjectState* s1,
@@ -67,7 +70,7 @@ bool Planner::findBestDubins(int o,
                continue;
             }
 
-            auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
+            auto candidate = findDubins(ds0, ds1, turning_rad, false);
 
             // skip invalid Dubins (infinite-length)
             if (candidate.omplDubins.length() == std::numeric_limits<double>::max())
@@ -109,6 +112,109 @@ bool Planner::findBestDubins(int o,
         // store transit path to the object
         transit_paths.push_back(best_transit->getPathPtr(true));
     }
+    return foundAny;
+}
+*/
+
+bool Planner::findBestDubins(int o,
+                             const ReloPush::State s0,
+                             const ReloPush::State s1,
+                             double turning_rad,
+                             reloDubinsPath &bestDubins,
+                             ReloPush::StatePathPtr &bestInterp,
+                             double interpResolution,
+                             const std::vector<std::pair<int,int>> &excludedIndices,
+                             int &chosen_i,
+                             int &chosen_j) const
+{
+    // Precompute the 4×4 yaw combinations
+    std::vector<double> yaws_start = {
+        s0.yaw,
+        s0.yaw + M_PI_2,
+        s0.yaw + M_PI,
+        s0.yaw + 3.0*M_PI_2
+    };
+    std::vector<double> yaws_goal = {
+        s1.yaw,
+        s1.yaw + M_PI_2,
+        s1.yaw + M_PI,
+        s1.yaw + 3.0*M_PI_2
+    };
+
+    // Workspace bounds
+    const double xmin = 0, xmax = 4;
+    const double ymin = 0, ymax = 5.2;
+
+    double best_len = std::numeric_limits<double>::infinity();
+    bool foundAny  = false;
+    //PathPlanResultPtr best_transit;
+
+    // Loop over all index pairs (i,j)
+    for (int i = 0; i < (int)yaws_start.size(); ++i)
+    {
+        double y0 = yaws_start[i];
+        ReloPush::State ds0(s0.x, s0.y, y0);
+
+        // approach check to ds0 (fixed: do this in the later stage)
+        //auto ds0_prepush = ReloPush::find_pre_push(
+        //    ds0,
+       //     (planCtx.parameters.LF_push + planCtx.parameters.obs_rad)*1.01
+        //);
+       //auto ph0 = planHybridAstar(transit_start, ds0_prepush, planCtx, true);
+        //if (ph0->validity != PlanValidity::success)
+        //    continue;
+
+        for (int j = 0; j < (int)yaws_goal.size(); ++j)
+        {
+            // 1) Skip if this (i,j) was excluded
+            if (std::find(excludedIndices.begin(),
+                          excludedIndices.end(),
+                          std::make_pair(i,j))
+                != excludedIndices.end())
+            {
+                continue;
+            }
+
+            double y1 = yaws_goal[j];
+            ReloPush::State ds1(s1.x, s1.y, y1);
+
+            // 2) Generate the raw Dubins candidate
+            auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
+            if (candidate.omplDubins.length() == std::numeric_limits<double>::max())
+                continue;
+
+            // 3) Interpolate
+            auto interp = candidate.interpolate(interpResolution);
+
+            // 4) Reject if out of bounds
+            bool inside = true;
+            for (auto &st : *interp) {
+                if (st.x < xmin || st.x > xmax || st.y < ymin || st.y > ymax) {
+                    inside = false;
+                    break;
+                }
+            }
+            if (!inside)
+                continue;
+
+            // 5) Score by length
+            double L = candidate.lengthCost();
+            if (L < best_len) {
+                best_len     = L;
+                bestDubins   = candidate;
+                bestInterp   = interp;
+                chosen_i     = i;
+                chosen_j     = j;
+                foundAny     = true;
+                //best_transit = ph0;
+            }
+        }
+    }
+
+    //if (foundAny) {
+        // store the transit path to ds0
+    //    transit_paths.push_back(best_transit->getPathPtr(true));
+    //}
     return foundAny;
 }
 
@@ -160,134 +266,36 @@ void Planner::recordCollisions(int o,
 //-----------------------------------------------------------------------------
 // 3) doClearance
 
-bool Planner::doClearance(int o,
-                          const std::vector<int> &idxes_collide,
-                          const std::unordered_map<int,ReloPush::State> &collision_pose,
-                          ob::State *state_curr,
-                          const ReloPush::StatePathPtr &interp,  // <<--- interp in
-                          og::PathGeometric &path_tmp,
-                          double margin)
-{
+//bool Planner::doClearance(int o,
+//                          const std::vector<int> &idxes_collide,
+//                          const std::unordered_map<int,ReloPush::State> &collision_pose,
+//                          ob::State *state_curr,
+//                          const ReloPush::StatePathPtr &interp,  // <<--- interp in
+//                          og::PathGeometric &path_tmp,
+//                          double margin)
+//{
 
-    //auto deb = STATE_OBJECT(state_curr,3)->getYaw();
-    // Inject the recorded collision poses into state_curr
-    /*
-    for (int c : idxes_collide) {
-        auto it = collision_pose.find(c);
-        if (it != collision_pose.end()) {
-            ObjectState* so = STATE_OBJECT(state_curr, c);
-            so->setX(it->second.x);
-            so->setY(it->second.y);
-            so->setYaw(it->second.yaw);
-        }
-    }
+//    //auto deb = STATE_OBJECT(state_curr,3)->getYaw();
+//    // Inject the recorded collision poses into state_curr
+//    /*
+//    for (int c : idxes_collide) {
+//        auto it = collision_pose.find(c);
+//        if (it != collision_pose.end()) {
+//            ObjectState* so = STATE_OBJECT(state_curr, c);
+//            so->setX(it->second.x);
+//            so->setY(it->second.y);
+//            so->setYaw(it->second.yaw);
+//        }
+//    }
 
-    */
-    // Call clearObstacles with selfish_path
-    return clearObstacles(idxes_collide, o, interp, state_curr, path_tmp, margin);
-
-
-}
+//    */
+//    // Call clearObstacles with selfish_path
+//    return clearObstacles(idxes_collide, o, interp, state_curr, path_tmp, margin);
 
 
-/*
-bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
-                             int o,
-                             const ReloPush::StatePathPtr &interp,
-                             ob::State* state_curr,
-                             og::PathGeometric& path_tmp, double margin)
-{
-    auto param_org = env_.getParamSingleForAll();
+//}
 
-    for (int c : idxes_collide)
-    {
-        ObjectState* state_c = STATE_OBJECT(state_curr, c);
-        double yaw = state_c->getYaw();
-        double step_size = 0.05;  // sampling step size
-        int max_steps = 40;       // max distance to try (2m total here)
 
-        ob::ProblemDefinitionPtr pdef_clear(new ob::ProblemDefinition(si_single4clear_));
-        pdef_clear->setOptimizationObjective(opt_inf);
-        pdef_clear->setGoalState(state_c);
-
-        ob::State* state_candidate = si_single4clear_->allocState();
-
-        int valid_starts = 0;
-        for (int step = 1; step <= max_steps && valid_starts < 10; ++step)
-        {
-            double dist = step * step_size;
-            double candidate_x = state_c->getX() + dist * cos(yaw);
-            double candidate_y = state_c->getY() + dist * sin(yaw);
-
-            state_candidate->as<ObjectState>()->setX(candidate_x);
-            state_candidate->as<ObjectState>()->setY(candidate_y);
-            state_candidate->as<ObjectState>()->setYaw(yaw);
-
-            if (!si_single4clear_->getStateSpace()->satisfiesBounds(state_candidate))
-                continue;
-
-            if (!si_single4clear_->isValid(state_candidate))
-                continue;
-
-            // check collision with interp path
-            bool collision_with_interp = false;
-            for (const auto &wp : *interp)
-            {
-                double dist_to_wp = sqrt(pow(candidate_x - wp.x, 2) + pow(candidate_y - wp.y, 2));
-                if (dist_to_wp < margin)
-                {
-                    collision_with_interp = true;
-                    break;
-                }
-            }
-
-            if (!collision_with_interp)
-            {
-                pdef_clear->addStartState(state_candidate);
-                ++valid_starts;
-            }
-        }
-
-        si_single4clear_->freeState(state_candidate);
-
-        if (valid_starts == 0)
-        {
-            env_.setParamSingleForAll(param_org);
-            return false;
-        }
-
-        og::RRTstar planner_clear(si_single4clear_);
-        planner_clear.setRange(1);
-        planner_clear.setProblemDefinition(pdef_clear);
-        planner_clear.setup();
-        ob::PlannerStatus solved = planner_clear.solve(ob::timedPlannerTerminationCondition(0.33));
-
-        auto geom_path_clear = static_cast<og::PathGeometric*>(pdef_clear->getSolutionPath().get());
-
-        if (!solved || !geom_path_clear ||
-            si_single4clear_->distance(geom_path_clear->getStates().back(), state_c) >= thresh_goal)
-        {
-            env_.setParamSingleForAll(param_org);
-            return false;
-        }
-
-        auto &path_clear = *geom_path_clear;
-        STATE_ROBOT(state_curr) = c;
-        path_tmp.append(state_curr);
-        for (int p = path_clear.getStateCount() - 1; p >= 0; --p)
-        {
-            auto sp = path_clear.getState(p)->as<ObjectState>();
-            state_c->setX(sp->getX());
-            state_c->setY(sp->getY());
-            state_c->setYaw(sp->getYaw());
-            path_tmp.append(state_curr);
-        }
-    }
-
-    env_.setParamSingleForAll(param_org);
-    return true;
-}
-*/
 
 bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,
@@ -415,6 +423,133 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     return true;
 }
 
+
+//bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
+//                             int o,
+//                             const ReloPush::StatePathPtr &interp,
+//                             ob::State* state_curr,
+//                             og::PathGeometric& path_tmp,
+//                             double margin)
+//{
+//    // save & restore original environment params
+//    auto param_org = env_.getParamSingleForAll();
+
+//    // parameters for sampling
+//    const double step_size = 0.05;  // 5 cm increments
+//    const int    max_steps = 40;    // up to 2 m
+
+//    // allocate a scratch state for validity checks
+//    ob::State* scratch = si_single4clear_->allocState();
+//    auto* so_scratch = scratch->as<ObjectState>();
+
+//    for (int c : idxes_collide)
+//    {
+//        // 1) record the collided object’s current pose
+//        ObjectState* state_c = STATE_OBJECT(state_curr, c);
+//        const double x0   = state_c->getX();
+//        const double y0   = state_c->getY();
+//        const double yaw0 = state_c->getYaw();
+
+//        // 2) four candidate push directions: forward, right, backward, left
+//        std::array<double,4> dirs = {
+//            yaw0,
+//            yaw0 + M_PI/2.0,
+//            yaw0 + M_PI,
+//            yaw0 + 3.0*M_PI/2.0
+//        };
+
+//        // 3) scan each direction to find the FIRST valid clearance start,
+//        //    then pick the one with the smallest distance
+//        double bestDist = std::numeric_limits<double>::infinity();
+//        double bestDir  = 0.0;
+
+//        for (double dir : dirs)
+//        {
+//            for (int step = 1; step <= max_steps; ++step)
+//            {
+//                double dist = step * step_size;
+//                double cx   = x0 + dist * std::cos(dir);
+//                double cy   = y0 + dist * std::sin(dir);
+
+//                // set scratch to candidate pose
+//                so_scratch->setX(cx);
+//                so_scratch->setY(cy);
+//                so_scratch->setYaw(dir);
+
+//                // bounds & environment validity
+//                if (!si_single4clear_->getStateSpace()->satisfiesBounds(scratch))
+//                    continue;
+//                if (!si_single4clear_->isValid(scratch))
+//                    continue;
+
+//                // avoid colliding with the interpolation path
+//                bool collide_interp = false;
+//                for (auto& wp : *interp)
+//                {
+//                    double dx = cx - wp.x;
+//                    double dy = cy - wp.y;
+//                    if (dx*dx + dy*dy < margin*margin)
+//                    {
+//                        collide_interp = true;
+//                        break;
+//                    }
+//                }
+//                if (collide_interp)
+//                    continue;
+
+//                // first valid for this direction → consider it
+//                if (dist < bestDist)
+//                {
+//                    bestDist = dist;
+//                    bestDir  = dir;
+//                }
+//                break;  // stop scanning further along this dir
+//            }
+//        }
+
+//        // if no direction was valid, bail out
+//        if (!std::isfinite(bestDist))
+//        {
+//            si_single4clear_->freeState(scratch);
+//            env_.setParamSingleForAll(param_org);
+//            return false;
+//        }
+
+//        // 4) build a straight‐line clearance path along bestDir
+//        //    reset object to its original collision pose
+//        state_c->setX(x0);
+//        state_c->setY(y0);
+//        state_c->setYaw(yaw0);
+
+//        // tag which object the robot is “pushing”
+//        STATE_ROBOT(state_curr) = c;
+
+//        // 4a) append the collision pose itself
+//        path_tmp.append(state_curr);
+
+//        // 4b) interpolate in step_size increments away from the collision
+//        int n_steps = static_cast<int>(std::floor(bestDist / step_size));
+//        for (int i = 1; i <= n_steps; ++i)
+//        {
+//            double di = i * step_size;
+//            double xi = x0 + di * std::cos(bestDir);
+//            double yi = y0 + di * std::sin(bestDir);
+
+//            auto* so = STATE_OBJECT(state_curr, c);
+//            so->setX(xi);
+//            so->setY(yi);
+//            so->setYaw(bestDir);
+
+//            path_tmp.append(state_curr);
+//        }
+//    }
+
+//    // clean up & restore params
+//    si_single4clear_->freeState(scratch);
+//    env_.setParamSingleForAll(param_org);
+//    return true;
+//}
+
 //------------------------------------------------------------------------------
 /**
  * Given the original object definitions and the two loaded OMPL states,
@@ -527,6 +662,7 @@ bool Planner::planSequence(const std::vector<int> &order,
     return true;
 }
 
+/*
 bool Planner::processObject(int o,
                             const ob::State *goal,
                             ob::State *state_curr,
@@ -586,6 +722,97 @@ bool Planner::processObject(int o,
 
 
     return true;
+}
+*/
+
+bool Planner::processObject(int o,
+                            const ob::State                    *goal,
+                            ob::State                          *state_curr,
+                            og::PathGeometric                  &path_tmp,
+                            double                              turningRad,
+                            double                              clearance_margin,
+                            const std::vector<int>             &done_objs,
+                            PlanningContext                    &planCtx,
+                            std::vector<ReloPush::State>       &arrival_poses,
+                            std::vector<ReloPush::StatePathPtr> &transit_paths)
+{
+    const ObjectState* s0 = STATE_OBJECT(state_curr, o);
+    const ObjectState* s1 = STATE_OBJECT(goal,       o);
+
+    ReloPush::State s0_relopush = ReloPush::State(s0->getX(),s0->getY(),s0->getYaw());
+    ReloPush::State s1_relopush = ReloPush::State(s1->getX(),s1->getY(),s1->getYaw());
+
+    // 1) Determine starting point for transit
+    ReloPush::State transit_start;
+    if (!arrival_poses.empty()) {
+        transit_start = ReloPush::find_pre_push(
+            arrival_poses.back(),
+            (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01
+        );
+    } else {
+        transit_start = ReloPush::State(0.1, 0.1, 0.2);
+    }
+
+    // 2) Prepare exclusion list of (i,j) index pairs
+    std::vector<std::pair<int,int>> excluded;
+    int chosen_i = -1, chosen_j = -1;
+
+    // 3) Keep trying until one succeeds or none left
+    while (true)
+    {
+        reloDubinsPath bestDubins;
+        ReloPush::StatePathPtr bestInterp(new ReloPush::StatePath);
+
+        bool gotOne = findBestDubins(
+            o, s0_relopush, s1_relopush, turningRad,
+            bestDubins, bestInterp,
+            planCtx.parameters.map_resolution,
+            excluded,    // skip these index pairs
+            chosen_i,    // OUT: start‐index in yaws_start
+            chosen_j     // OUT: goal‐index  in yaws_goal
+        );
+
+        if (!gotOne)
+            return false;  // exhausted all candidates
+
+        // 4) Create a “selfish” path for collision checking
+        og::PathGeometric selfish(si_single4all_);
+        appendInitialState(o, state_curr, selfish);
+        appendWaypoints   (o, bestInterp,   state_curr, selfish);
+
+        // 5) Record collisions
+        std::vector<int> idxes_collide;
+        std::unordered_map<int, ReloPush::State> collision_pose;
+        recordCollisions(o, bestInterp, state_curr,
+                         idxes_collide, collision_pose);
+
+
+
+
+        // 6) If collisions → attempt clearance
+        if (!idxes_collide.empty())
+        {
+            bool cleared = clearObstacles(
+                idxes_collide, o, bestInterp,
+                state_curr, path_tmp,
+                clearance_margin
+            );
+            if (!cleared) {
+                std::cout << "\tClearing failed. Trying other start/goal poses" << std::endl;
+                // rollback the transit path we just pushed
+                //transit_paths.pop_back();
+                // mark this (i,j) as excluded
+                excluded.emplace_back(std::make_pair(chosen_i, chosen_j));
+                // and try the next Dubins
+                continue;
+            }
+        }
+
+        // 7) Success: append to final path & record arrival
+        appendDubinsSegment(o, bestInterp, state_curr, path_tmp);
+        arrival_poses.push_back(bestDubins.targetState);
+        return true;
+    }
 }
 
 void Planner::appendInitialState(int o,
