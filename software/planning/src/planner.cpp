@@ -844,6 +844,72 @@ void Planner::path2Actions( const ompl::geometric::PathGeometric &path,
     }
 }
 
+void Planner::path2ActionsWithTransitPaths(
+    const ompl::geometric::PathGeometric &path,
+    const std::vector<ReloPush::StatePathPtr> &transitPaths,
+    std::vector<Action> &actions)
+{
+    size_t transitIdx = 0;
+
+    // walk through each segment of the OMPL path
+    for (int i = 1; i < path.getStateCount(); ++i)
+    {
+        const ob::State *state_prev = path.getState(i - 1);
+        const ob::State *state_curr = path.getState(i);
+
+        int o_prev = STATE_ROBOT(state_prev);
+        int o_curr = STATE_ROBOT(state_curr);
+
+        // extract the object‐pose for transfer actions
+        const ObjectState *s_curr = STATE_OBJECT(state_curr, o_curr);
+
+        // whenever we transition to a new object (or at the very first step)
+        if (i == 1 || o_prev != o_curr)
+        {
+            // --- inject the precomputed “transit path” for this leg ---
+            if (transitIdx < transitPaths.size())
+            {
+                const auto &statePath = *transitPaths[transitIdx++];
+                for (const auto &sp : statePath)
+                {
+                    Action a;
+                    a.type = ACTION_TRANSITION;
+                    a.x = sp.x;
+                    a.y = sp.y;
+                    a.yaw = sp.yaw;
+                    a.idx_target = o_curr;
+                    a.idx_target2 = -1;
+                    actions.push_back(a);
+                }
+            }
+            else
+            {
+                // fallback if no transitPath provided:
+                Action a;
+                a.type = ACTION_TRANSITION;
+                a.x = s_curr->getX();
+                a.y = s_curr->getY();
+                a.yaw = s_curr->getYaw();
+                a.idx_target = o_curr;
+                a.idx_target2 = -1;
+                actions.push_back(a);
+            }
+        }
+
+        // --- now the actual “transfer” step along the object’s path ---
+        {
+            Action a;
+            a.type = ACTION_TRANSFER;
+            a.x = s_curr->getX();
+            a.y = s_curr->getY();
+            a.yaw = s_curr->getYaw();
+            a.idx_target = o_curr;
+            a.idx_target2 = -1;
+            actions.push_back(a);
+        }
+    }
+}
+
 bool Planner::plan_pushing( const ompl::base::State* state, int o_pusher, int o_target,
                             const og::PathGeometric &path_target,
                             og::PathGeometric &path_res,
@@ -2006,19 +2072,24 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
 
     ob::State* state_curr = si_all4all_->allocState();
     og::PathGeometric best_path(si_all4all_);
+    std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
 
     // try all permutations until success
     do {
         si_all4all_->copyState(state_curr, start);
         og::PathGeometric path_tmp(si_all4all_);
         std::vector<int> done_objs;
+        std::vector<ReloPush::StatePathPtr> transit_paths;
+        transit_paths.clear();
 
         //std::cout << "preplan" << std::endl;
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
-                         done_objs))
+                         done_objs,
+                        transit_paths))
         {
             best_path = path_tmp;
+            best_transit_paths = transit_paths;
             break;
         }
         //std::cout << "postplan" << std::endl;
@@ -2030,12 +2101,12 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
     // check if the path is empty (failed)
     if(path_res.getStateCount()==0)
         std::cout << "No solution" << std::endl;
-    path2Actions(path_res, actions_res);
-    return !path_res.getStateCount() == 0;
+    
+    //path2Actions(path_res, actions_res);
+    path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
+
+        return !path_res.getStateCount() == 0;
 }
-
-
-
 
 
 

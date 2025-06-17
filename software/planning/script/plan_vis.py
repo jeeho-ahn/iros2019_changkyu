@@ -114,7 +114,7 @@ def visualize(actions, path):
     artists.append(ax2.scatter(prev['x'], prev['y'], color=colors[(prev['obj']-1) % len(colors)]))
 
     # intervals: transit slower, transfer faster
-    transit_ms = 800
+    transit_ms = 400
     transfer_ms = 100  # faster transfer
 
     def update(i):

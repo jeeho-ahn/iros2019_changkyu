@@ -117,7 +117,12 @@ public:
     static double compute_cost( const ompl::geometric::PathGeometric &path );
 
     void path2Actions( const ompl::geometric::PathGeometric &path, 
-                       std::vector<Action> &actions                );
+                       std::vector<Action> &actions);
+
+    void path2ActionsWithTransitPaths(
+        const ompl::geometric::PathGeometric &path,
+        const std::vector<ReloPush::StatePathPtr> &transitPaths,
+        std::vector<Action> &actions);
 
     double distance( const ompl::base::State* s1, const ompl::base::State* s2 )
     {
@@ -206,7 +211,7 @@ private:
                         double interpResolution,
                         PlanningContext &planCtx,
                         ReloPush::State& transit_start,
-                        std::vector<ReloPush::StatePathPtr> transit_paths) const;
+                        std::vector<ReloPush::StatePathPtr>& transit_paths) const;
 
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
@@ -247,7 +252,8 @@ private:
                       const ob::State *goal,
                       ob::State *state_curr,
                       og::PathGeometric &path_tmp,
-                      std::vector<int> &done_objs);
+                      std::vector<int> &done_objs,
+                      std::vector<ReloPush::StatePathPtr> &transit_paths);
 
     bool processObject(int o,
                        const ob::State *goal,
@@ -258,7 +264,7 @@ private:
                        const std::vector<int> &done_objs,
                        PlanningContext &planCtx,
                        std::vector<ReloPush::State>& arrival_poses,
-                       std::vector<ReloPush::StatePathPtr> transit_paths);
+                       std::vector<ReloPush::StatePathPtr>& transit_paths);
 
     void appendInitialState(int o,
                              const ob::State* state_curr,
