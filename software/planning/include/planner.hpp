@@ -258,6 +258,9 @@ private:
                          const ReloPush::StatePathPtr& interp,
                          ob::State* state_curr,
                          og::PathGeometric& path_tmp,
+                        PlanningContext& planCtx,
+                        ReloPush::StatePathPtrList& transit_paths,
+                        ReloPush::State& transit_start,
                          double margin = 0.3);
 
 //    bool clearObstacles(const std::vector<int>& idxes_collide,
