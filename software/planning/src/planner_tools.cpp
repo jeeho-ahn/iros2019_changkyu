@@ -426,55 +426,63 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 */
 
 
-
-
-
-bool dfsClearance(const std::vector<std::vector<std::pair<double,ReloPush::State>>>& allCands,
-                           PlanningContext& planCtx,
+bool Planner::dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCands,
+                           PlanningContext planCtx,  // Pass-by-value (copy for each call)
                            ReloPush::State& transit_start,
                            int obsIdx,
-                           std::vector<std::pair<double,double>>& current_set,
-                           ReloPush::StatePathPtrList& transit_paths)
+                           ReloPush::StatePathPtrList& transit_paths,
+                           std::vector<int>& selected_indices,
+                           const std::vector<int>& idxes_collide,
+                           const ReloPush::State transit_end)
 {
-    // If we processed all obstacles, we're done
+    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
     if (obsIdx == allCands.size())
-        return true;
-
-    // Try each candidate for the current obstacle
-    for (const auto& cand : allCands[obsIdx])
     {
-//        double d = cand.first;
-//        double dir = cand.second;
-
-//        // candidate pose
-//        auto& obs_pose = current_set[obsIdx];
-//        double cx = obs_pose.first;
-//        double cy = obs_pose.second;
-
-        ReloPush::State next_pose = cand.second;
-
-        // Check transit path validity
-        auto ph = planHybridAstar(transit_start, next_pose, planCtx, true);
+        // last transit to the object to rearrange
+        auto ph = planHybridAstar(transit_start, transit_end, planCtx, true);
         if (ph->validity != PlanValidity::success)
-            continue;  // try the next candidate
+            return false;
 
-        // If transit path is valid, store it and proceed
         transit_paths.push_back(ph->getPathPtr(true));
-
-        // Update the transit start for the next iteration
-        ReloPush::State transit_next = next_pose;
-
-        // Recursive call to handle next obstacle
-        if (dfsClearance(allCands, planCtx, transit_next, obsIdx+1, current_set, transit_paths))
-            return true;
-
-        // Backtrack if not successful
-        transit_paths.pop_back();
+        return true;
     }
 
-    // no valid candidate found
+    int c = idxes_collide[obsIdx];
+    for (size_t cand_idx = 0; cand_idx < allCands[obsIdx].size(); ++cand_idx)
+    {
+        ClearanceCand cand = allCands[obsIdx][cand_idx];
+
+        // Get the entry pose (start of path), and exit pose (end of path)
+        ReloPush::State entry_pose = ReloPush::find_pre_push(cand.obs_start,prepush_th);
+        //const ReloPush::State& exit_pose  = cand.path->back();
+
+        // Plan transit from current position to this candidate's entry pose
+        auto ph = planHybridAstar(transit_start, entry_pose, planCtx, true);
+        if (ph->validity != PlanValidity::success) continue;
+
+        transit_paths.push_back(ph->getPathPtr(true));
+        selected_indices[obsIdx] = cand_idx;
+
+        // *** Make a new copy for the next DFS call ***
+        PlanningContext planCtxNext = planCtx; // Deep copy
+
+        // Update the moved obstacle pose in planCtxNext!
+        planCtxNext.removeObs(cand.obs_start);
+        planCtxNext.addObs(cand.path->back());
+
+
+        // DFS to the next obstacle
+        if (dfsClearance(allCands, planCtxNext, entry_pose,
+                         obsIdx+1, transit_paths, selected_indices, idxes_collide, transit_end))
+            return true;
+
+        // Backtrack
+        transit_paths.pop_back();
+        selected_indices[obsIdx] = -1;
+    }
     return false;
 }
+
 
 bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,
@@ -484,39 +492,37 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              PlanningContext& planCtx,
                              ReloPush::StatePathPtrList& transit_paths,
                              ReloPush::State& transit_start,
+                             const ReloPush::State& transit_end,
                              double margin)
 {
     auto param_org = env_.getParamSingleForAll();
 
     const double step_size = 0.05;
-    const int    max_steps = 40;
-
+    const int max_steps = 40;
     float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
 
     ob::State* scratch = si_single4clear_->allocState();
     auto* so_scratch = scratch->as<ObjectState>();
 
-    std::vector<std::vector<std::pair<double,ReloPush::State>>> allCands;
-    std::vector<std::pair<double,double>> obs_poses;
+    std::vector<std::vector<ClearanceCand>> allCands;
     allCands.reserve(idxes_collide.size());
 
     for (int c : idxes_collide)
     {
         ObjectState* state_c = STATE_OBJECT(state_curr, c);
-        const double x0 = state_c->getX();
-        const double y0 = state_c->getY();
-        const double yaw0 = state_c->getYaw();
+        const double x0 = state_c->getX(), y0 = state_c->getY(), yaw0 = state_c->getYaw();
 
-        obs_poses.emplace_back(std::make_pair(x0, y0));
-
-        std::array<double,4> dirs = {yaw0, yaw0 + M_PI/2.0, yaw0 + M_PI, yaw0 + 3.0*M_PI/2.0};
-        std::vector<std::pair<double,ReloPush::State>> cand;
+        std::array<double,4> dirs = {yaw0, yaw0 + M_PI_2, yaw0 + M_PI, yaw0 + 3*M_PI_2};
+        std::vector<ClearanceCand> cand;
 
         for (double dir : dirs)
         {
-            auto obs_pose = ReloPush::State(x0,y0,dir);
+            auto obs_pose = ReloPush::State(x0, y0, dir);
             auto obs_prepush = ReloPush::find_pre_push(obs_pose, prepush_th);
             if (!planCtx.env_nonpush.stateValid(obs_prepush)) continue;
+
+            auto linear_path = std::make_shared<ReloPush::StatePath>();
+            bool found_valid = false;
 
             for (int step = 1; step <= max_steps; ++step)
             {
@@ -533,69 +539,53 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                 bool bad = false;
                 for (auto &wp : *interp){
                     double dx = cx - wp.x, dy = cy - wp.y;
-                    if (dx*dx+dy*dy < margin*margin){ bad=true; break; }
+                    if (dx*dx + dy*dy < margin*margin) { bad = true; break; }
                 }
                 if (bad) continue;
 
-                cand.emplace_back(std::make_pair(d, obs_prepush));
-                break;
+                // Create linear straight-line path
+                for (int i = 1; i <= step; ++i) {
+                    double di = i * step_size;
+                    linear_path->emplace_back(x0 + di*cos(dir), y0 + di*sin(dir), dir);
+                }
+
+                cand.emplace_back(ClearanceCand(d, dir, linear_path,obs_pose));
+                found_valid = true;
+                break;  // only first valid candidate
             }
         }
-        std::sort(cand.begin(), cand.end(), [](auto &a, auto &b){ return a.first < b.first; });
+
+        std::sort(cand.begin(), cand.end(), [](auto &a, auto &b){ return a.dist < b.dist; });
         allCands.push_back(std::move(cand));
     }
 
-    std::vector<std::pair<double,double>> current_set = obs_poses;
+    //transit_paths.clear();
+    std::vector<int> selected_indices(idxes_collide.size(), -1);
+    bool success = dfsClearance(allCands, planCtx, transit_start,
+                                0, transit_paths, selected_indices,idxes_collide,transit_end);
 
-    bool success = dfsClearance(allCands, planCtx, transit_start, 0, current_set, transit_paths);
-    // After a successful dfsClearance call, append linear clearance paths to path_tmp
     if (success)
     {
-        // Reset environment to original parameters
-        env_.setParamSingleForAll(param_org);
-
         ob::State* state_clear = si_all4all_->allocState();
         si_all4all_->copyState(state_clear, state_curr);
 
         for (size_t obsIdx = 0; obsIdx < idxes_collide.size(); ++obsIdx)
         {
             int c = idxes_collide[obsIdx];
+            ClearanceCand& selected_cand = allCands[obsIdx][selected_indices[obsIdx]];
+            ReloPush::StatePath& straight_path = *(selected_cand.path);
 
             ObjectState* state_c = STATE_OBJECT(state_clear, c);
-            double x0 = state_c->getX();
-            double y0 = state_c->getY();
-            double yaw0 = state_c->getYaw();
-
-            double bestDist = current_set[obsIdx].first;
-            double bestDir  = current_set[obsIdx].second;
-
-            // Reset to original pose
-            state_c->setX(x0);
-            state_c->setY(y0);
-            state_c->setYaw(yaw0);
-
-            // Mark robot as pushing object c
             STATE_ROBOT(state_clear) = c;
 
-            // Append the collision pose itself first
-            path_tmp.append(state_clear);
-
-            // Interpolate and append poses along the linear clearance path
-            int n_steps = static_cast<int>(std::floor(bestDist / step_size));
-            for (int i = 1; i <= n_steps; ++i)
+            for (auto& wp : straight_path)
             {
-                double di = i * step_size;
-                double xi = x0 + di * std::cos(bestDir);
-                double yi = y0 + di * std::sin(bestDir);
-
-                state_c->setX(xi);
-                state_c->setY(yi);
-                state_c->setYaw(bestDir);
-
+                state_c->setX(wp.x);
+                state_c->setY(wp.y);
+                state_c->setYaw(wp.yaw);
                 path_tmp.append(state_clear);
             }
         }
-
         si_all4all_->freeState(state_clear);
     }
 
@@ -604,10 +594,6 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
     return success;
 }
-
-
-
-
 
 
 //bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
@@ -828,7 +814,9 @@ bool Planner::planSequence(const std::vector<int> &order,
 
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
-                           clearance_margin, done_objs, planCtx, arrival_poses, transit_paths, robots))
+                           clearance_margin, done_objs,
+                           planCtx, arrival_poses,
+                           transit_paths, robots))
         {
             std::cout << "\n[";
             for(auto it : order)
@@ -843,6 +831,7 @@ bool Planner::planSequence(const std::vector<int> &order,
         // Add object in done list
         done_objs.push_back(o);
         std::cout << " << " << o;
+        std::cout.flush();
         
     }
     return true;
@@ -975,13 +964,16 @@ bool Planner::processObject(int o,
         recordCollisions(o, bestInterp, state_curr,
                          idxes_collide, collision_pose);
 
+
+        ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
+
         // 6) If collisions → attempt clearance
         if (!idxes_collide.empty())
         {
             bool cleared = clearObstacles(
                 idxes_collide, o, bestInterp,
                 state_curr, path_tmp,
-                 planCtx, transit_paths, transit_start, clearance_margin
+                 planCtx, transit_paths, transit_start, obj_app, clearance_margin
             );
             if (!cleared) {
                 std::cout << "\tClearing failed. Trying other start/goal poses" << std::endl;
@@ -996,7 +988,6 @@ bool Planner::processObject(int o,
         else
         {
             // transit from robot todo: plan dubins in robot perspective
-            ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
             auto ph0 = planHybridAstar(transit_start, obj_app, planCtx, true);
             if (ph0->validity != PlanValidity::success)
             {

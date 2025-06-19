@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import re
 import sys
@@ -16,20 +17,18 @@ def parse_result(fp):
     lines = open(fp).read().splitlines()
     actions, path = [], []
     i, n = 0, len(lines)
-
+    import re
     while i < n:
         line = lines[i].strip()
-        # parse actions block
         if line.startswith('actions:'):
             while i < n and '[' not in lines[i]:
                 i += 1
             i += 1
             while i < n and not lines[i].strip().startswith(']'):
-                row = lines[i].strip()
                 m = re.match(
                     r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*'
                     r'([-\d\.eE]+)\s*,\s*([-\d\.eE]+)\s*,\s*([-\d\.eE]+)\s*\]',
-                    row
+                    lines[i].strip()
                 )
                 if m:
                     t, idx, idx2, x, y, yaw = m.groups()
@@ -41,7 +40,6 @@ def parse_result(fp):
                         'yaw': float(yaw)
                     })
                 i += 1
-        # parse path block (unused for slider but needed for overall)
         elif line.startswith('path:'):
             while i < n and '[' not in lines[i]:
                 i += 1
@@ -54,7 +52,6 @@ def parse_result(fp):
                 i += 1
         else:
             i += 1
-
     return actions, path
 
 def draw_overall(ax, path):
@@ -83,26 +80,28 @@ def draw_overall(ax, path):
         ax.text(gx, gy, f"G{o}", color=c)
 
 def draw_frame(ax, actions, frame, xlim, ylim):
-    """Redraw ax with arrows and oriented rectangles up to a given frame index."""
+    """Draw poses up to 'frame' as oriented arrows; draw transfer squares."""
     ax.clear()
     ax.set_aspect('equal','box')
     ax.set_title(f"Action Sequence (frame {frame}/{len(actions)-1})")
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     colors = plt.cm.tab10.colors
-    prev = actions[0]
-    ax.scatter(prev['x'], prev['y'], color=colors[(prev['obj']-1)%len(colors)])
-    for i in range(1, frame+1):
+    arrow_len = 0.3
+    head_w, head_l = 0.1, 0.1
+
+    for i in range(frame+1):
         a = actions[i]
         c = colors[(a['obj']-1)%len(colors)]
-        ax.annotate(
-            '',
-            xy=(a['x'], a['y']),
-            xytext=(prev['x'], prev['y']),
-            arrowprops=dict(arrowstyle='->', color=c, lw=2)
+        dx = arrow_len * math.cos(a['yaw'])
+        dy = arrow_len * math.sin(a['yaw'])
+        ax.arrow(
+            a['x'], a['y'], dx, dy,
+            head_width=head_w, head_length=head_l,
+            fc=c, ec=c, length_includes_head=True
         )
         if a['type'] == 1:
-            w,h = 0.3, 0.3
+            w, h = 0.3, 0.3
             rect = patches.Rectangle(
                 (a['x']-w/2, a['y']-h/2),
                 w, h, fill=False, lw=2, color=c
@@ -111,7 +110,6 @@ def draw_frame(ax, actions, frame, xlim, ylim):
             trans = transforms.Affine2D().rotate_deg_around(a['x'], a['y'], angle) + ax.transData
             rect.set_transform(trans)
             ax.add_patch(rect)
-        prev = a
 
 def main(result_file):
     actions, path = parse_result(result_file)
@@ -130,14 +128,9 @@ def main(result_file):
     ax2 = fig.add_subplot(1,2,2)
     draw_overall(ax1, path)
 
-    # Slider below axes:
     ax_slider = fig.add_axes([0.25, 0.02, 0.5, 0.03])
     slider = Slider(ax_slider, 'Frame', 0, len(actions)-1, valinit=0, valstep=1)
-
-    # Initial draw
     draw_frame(ax2, actions, 0, xlim, ylim)
-
-    # Update on slider change
     slider.on_changed(lambda val: draw_frame(ax2, actions, int(val), xlim, ylim))
 
     plt.tight_layout(rect=[0, 0.04, 1, 1])
@@ -145,6 +138,6 @@ def main(result_file):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python visualize_plan_with_slider.py path/to/result.res")
+        print("Usage: python visualize_plan_poses.py path/to/result.res")
         sys.exit(1)
     main(sys.argv[1])

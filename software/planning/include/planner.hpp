@@ -252,6 +252,28 @@ private:
                      og::PathGeometric &path_tmp);
     */
 
+    struct ClearanceCand {
+        double dist;
+        double dir;
+        ReloPush::StatePathPtr path;  // Using shared pointer to avoid unnecessary copying
+        ReloPush::State obs_start;
+        //ReloPush::State obs_goal;
+
+        ClearanceCand(double d, double di, ReloPush::StatePathPtr p, ReloPush::State s)
+            : dist(d), dir(di), path(std::move(p)), obs_start(s) {}
+    };
+    using ClearanceCands = std::vector<ClearanceCand>;
+
+    bool dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCands,
+                               PlanningContext planCtx,  // Pass-by-value (copy for each call)
+                               ReloPush::State& transit_start,
+                               int obsIdx,
+                               ReloPush::StatePathPtrList& transit_paths,
+                               std::vector<int>& selected_indices,
+                               const std::vector<int>& idxes_collide,
+                               const ReloPush::State transit_end);
+
+
 
     bool clearObstacles(const std::vector<int>& idxes_collide,
                          int o,
@@ -261,6 +283,7 @@ private:
                         PlanningContext& planCtx,
                         ReloPush::StatePathPtrList& transit_paths,
                         ReloPush::State& transit_start,
+                        const ReloPush::State& transit_end,
                          double margin = 0.3);
 
 //    bool clearObstacles(const std::vector<int>& idxes_collide,
