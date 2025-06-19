@@ -576,6 +576,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
             ReloPush::StatePath& straight_path = *(selected_cand.path);
 
             ObjectState* state_c = STATE_OBJECT(state_clear, c);
+
             STATE_ROBOT(state_clear) = c;
 
             for (auto& wp : straight_path)
@@ -586,6 +587,11 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                 path_tmp.append(state_clear);
             }
         }
+
+        // *** Copy back into your “live” planning state ***
+        si_all4all_->copyState(state_curr, state_clear);
+
+
         si_all4all_->freeState(state_clear);
     }
 
