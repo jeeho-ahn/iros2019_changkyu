@@ -429,6 +429,53 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
 
 
+bool dfsClearance(const std::vector<std::vector<std::pair<double,ReloPush::State>>>& allCands,
+                           PlanningContext& planCtx,
+                           ReloPush::State& transit_start,
+                           int obsIdx,
+                           std::vector<std::pair<double,double>>& current_set,
+                           ReloPush::StatePathPtrList& transit_paths)
+{
+    // If we processed all obstacles, we're done
+    if (obsIdx == allCands.size())
+        return true;
+
+    // Try each candidate for the current obstacle
+    for (const auto& cand : allCands[obsIdx])
+    {
+//        double d = cand.first;
+//        double dir = cand.second;
+
+//        // candidate pose
+//        auto& obs_pose = current_set[obsIdx];
+//        double cx = obs_pose.first;
+//        double cy = obs_pose.second;
+
+        ReloPush::State next_pose = cand.second;
+
+        // Check transit path validity
+        auto ph = planHybridAstar(transit_start, next_pose, planCtx, true);
+        if (ph->validity != PlanValidity::success)
+            continue;  // try the next candidate
+
+        // If transit path is valid, store it and proceed
+        transit_paths.push_back(ph->getPathPtr(true));
+
+        // Update the transit start for the next iteration
+        ReloPush::State transit_next = next_pose;
+
+        // Recursive call to handle next obstacle
+        if (dfsClearance(allCands, planCtx, transit_next, obsIdx+1, current_set, transit_paths))
+            return true;
+
+        // Backtrack if not successful
+        transit_paths.pop_back();
+    }
+
+    // no valid candidate found
+    return false;
+}
+
 bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              int o,
                              const ReloPush::StatePathPtr &interp,
@@ -438,63 +485,43 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                              ReloPush::StatePathPtrList& transit_paths,
                              ReloPush::State& transit_start,
                              double margin)
-
 {
-    // save & restore original environment params
     auto param_org = env_.getParamSingleForAll();
 
-    // parameters for sampling
-    const double step_size = 0.05;  // 5 cm increments
-    const int    max_steps = 40;    // up to 2 m
+    const double step_size = 0.05;
+    const int    max_steps = 40;
 
-    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01; // todo: parameterize
+    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
 
-    // allocate a scratch state for validity checks
     ob::State* scratch = si_single4clear_->allocState();
     auto* so_scratch = scratch->as<ObjectState>();
 
-    std::vector<std::vector<std::pair<double,double>>> allCands;
+    std::vector<std::vector<std::pair<double,ReloPush::State>>> allCands;
+    std::vector<std::pair<double,double>> obs_poses;
     allCands.reserve(idxes_collide.size());
 
     for (int c : idxes_collide)
     {
-        // 1) record the collided object’s current pose
         ObjectState* state_c = STATE_OBJECT(state_curr, c);
-        const double x0   = state_c->getX();
-        const double y0   = state_c->getY();
+        const double x0 = state_c->getX();
+        const double y0 = state_c->getY();
         const double yaw0 = state_c->getYaw();
 
-        // 2) four candidate push directions: forward, right, backward, left
-        std::array<double,4> dirs = {
-            yaw0,
-            yaw0 + M_PI/2.0,
-            yaw0 + M_PI,
-            yaw0 + 3.0*M_PI/2.0
-        };
+        obs_poses.emplace_back(std::make_pair(x0, y0));
 
-        // 3) scan each direction to find the FIRST valid clearance start,
-        //    then pick the one with the smallest distance
-        double bestDist = std::numeric_limits<double>::infinity();
-        double bestDir  = 0.0;
+        std::array<double,4> dirs = {yaw0, yaw0 + M_PI/2.0, yaw0 + M_PI, yaw0 + 3.0*M_PI/2.0};
+        std::vector<std::pair<double,ReloPush::State>> cand;
 
-        std::vector<std::pair<double,double>> cand;
         for (double dir : dirs)
         {
-            // check if prepush is valid
             auto obs_pose = ReloPush::State(x0,y0,dir);
-            auto obs_prepush = ReloPush::find_pre_push(obs_pose,prepush_th);
-            if(!planCtx.env_nonpush.stateValid(obs_prepush))
-            {
-                // this is not accessible
-                continue;
-            }
+            auto obs_prepush = ReloPush::find_pre_push(obs_pose, prepush_th);
+            if (!planCtx.env_nonpush.stateValid(obs_prepush)) continue;
 
-            // walk out until a valid clearance‐start or give up
             for (int step = 1; step <= max_steps; ++step)
             {
-                double d = step*step_size;
-                double cx = x0 + d*std::cos(dir),
-                       cy = y0 + d*std::sin(dir);
+                double d = step * step_size;
+                double cx = x0 + d * cos(dir), cy = y0 + d * sin(dir);
 
                 so_scratch->setX(cx);
                 so_scratch->setY(cy);
@@ -503,115 +530,81 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                 if (!si_single4clear_->getStateSpace()->satisfiesBounds(scratch)) continue;
                 if (!si_single4clear_->isValid(scratch)) continue;
 
-                // avoid colliding with interp
-                bool bad=false;
-                for(auto &wp : *interp){
-                    double dx=cx-wp.x, dy=cy-wp.y;
-                    if(dx*dx+dy*dy < margin*margin){ bad=true; break; }
+                bool bad = false;
+                for (auto &wp : *interp){
+                    double dx = cx - wp.x, dy = cy - wp.y;
+                    if (dx*dx+dy*dy < margin*margin){ bad=true; break; }
                 }
-                if(bad) continue;
+                if (bad) continue;
 
-                cand.emplace_back(std::make_pair(d, dir));
-                break;  // only the first valid along this dir
+                cand.emplace_back(std::make_pair(d, obs_prepush));
+                break;
             }
         }
-        // sort by increasing distance
-        std::sort(cand.begin(), cand.end(),
-                  [](auto &a, auto &b){ return a.first < b.first; });
+        std::sort(cand.begin(), cand.end(), [](auto &a, auto &b){ return a.first < b.first; });
         allCands.push_back(std::move(cand));
-
-        /*
-        // if no direction was valid, bail out
-        if (!std::isfinite(bestDist))
-        {
-            si_single4clear_->freeState(scratch);
-            env_.setParamSingleForAll(param_org);
-            return false;
-        }
-
-
-
-        // 4) build a straight‐line clearance path along bestDir
-        //    reset object to its original collision pose
-        state_c->setX(x0);
-        state_c->setY(y0);
-        state_c->setYaw(yaw0);
-
-        // tag which object the robot is “pushing”
-        STATE_ROBOT(state_curr) = c;
-
-        // 4a) append the collision pose itself
-        path_tmp.append(state_curr);
-
-        // 4b) interpolate in step_size increments away from the collision
-        int n_steps = static_cast<int>(std::floor(bestDist / step_size));
-        for (int i = 1; i <= n_steps; ++i)
-        {
-            double di = i * step_size;
-            double xi = x0 + di * std::cos(bestDir);
-            double yi = y0 + di * std::sin(bestDir);
-
-            auto* so = STATE_OBJECT(state_curr, c);
-            so->setX(xi);
-            so->setY(yi);
-            so->setYaw(bestDir);
-
-            path_tmp.append(state_curr);
-        }
-        */
     }
 
+    std::vector<std::pair<double,double>> current_set = obs_poses;
 
-    ObjectState* dd = STATE_OBJECT(state_curr, c);
-    const double xd   = dd->getX();
-    const double yd   = dd->getY();
-    double yawd = allCands[n][0].second;
-    ReloPush::State d1 = ReloPush::State(xd,yd,yawd);
-    auto d1_prepush = ReloPush::find_pre_push(d1,prepush_th);
-    auto ph_d = planHybridAstar(transit_start,d1,planCtx,true);
-    if(ph_d->validity!=PlanValidity::success)
-        return false; // todo: fall back
-
-    transit_paths.push_back(ph_d->getPathPtr(true));
-
-
-    // pick the first pushing
-    for(int n = 0; n<idxes_collide.size()-1; n++)
+    bool success = dfsClearance(allCands, planCtx, transit_start, 0, current_set, transit_paths);
+    // After a successful dfsClearance call, append linear clearance paths to path_tmp
+    if (success)
     {
-        if(allCands[n].size()==0 || allCands[n+1].size()==0)
-            return false;
+        // Reset environment to original parameters
+        env_.setParamSingleForAll(param_org);
 
-        int c = n+1;
+        ob::State* state_clear = si_all4all_->allocState();
+        si_all4all_->copyState(state_clear, state_curr);
 
+        for (size_t obsIdx = 0; obsIdx < idxes_collide.size(); ++obsIdx)
+        {
+            int c = idxes_collide[obsIdx];
 
-        ObjectState* state_c1 = STATE_OBJECT(state_curr, c);
-        const double x1   = state_c1->getX();
-        const double y1   = state_c1->getY();
-        double yaw1 = allCands[n][0].second;
-        ReloPush::State s1 = ReloPush::State(x1,y1,yaw1);
-        auto s1_prepush = ReloPush::find_pre_push(s1,prepush_th);
+            ObjectState* state_c = STATE_OBJECT(state_clear, c);
+            double x0 = state_c->getX();
+            double y0 = state_c->getY();
+            double yaw0 = state_c->getYaw();
 
-        ObjectState* state_c2 = STATE_OBJECT(state_curr, c+1);
-        const double x2   = state_c2->getX();
-        const double y2   = state_c2->getY();
-        double yaw2 = allCands[n+1][0].second;
-        ReloPush::State s2 = ReloPush::State(x2,y2,yaw2);
-        auto s2_prepush = ReloPush::find_pre_push(s2,prepush_th);
+            double bestDist = current_set[obsIdx].first;
+            double bestDir  = current_set[obsIdx].second;
 
+            // Reset to original pose
+            state_c->setX(x0);
+            state_c->setY(y0);
+            state_c->setYaw(yaw0);
 
-        auto ph = planHybridAstar(s1_prepush,s2_prepush,planCtx,true);
-        if(ph->validity!=PlanValidity::success)
-            return false; // todo: fall back
+            // Mark robot as pushing object c
+            STATE_ROBOT(state_clear) = c;
 
-        transit_paths.push_back(ph->getPathPtr(true));
+            // Append the collision pose itself first
+            path_tmp.append(state_clear);
+
+            // Interpolate and append poses along the linear clearance path
+            int n_steps = static_cast<int>(std::floor(bestDist / step_size));
+            for (int i = 1; i <= n_steps; ++i)
+            {
+                double di = i * step_size;
+                double xi = x0 + di * std::cos(bestDir);
+                double yi = y0 + di * std::sin(bestDir);
+
+                state_c->setX(xi);
+                state_c->setY(yi);
+                state_c->setYaw(bestDir);
+
+                path_tmp.append(state_clear);
+            }
+        }
+
+        si_all4all_->freeState(state_clear);
     }
 
-
-    // clean up & restore params
     si_single4clear_->freeState(scratch);
     env_.setParamSingleForAll(param_org);
-    return true;
+
+    return success;
 }
+
 
 
 
@@ -835,7 +828,7 @@ bool Planner::planSequence(const std::vector<int> &order,
 
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
-                           clearance_margin, done_objs, planCtx, arrival_poses, transit_paths))
+                           clearance_margin, done_objs, planCtx, arrival_poses, transit_paths, robots))
         {
             std::cout << "\n[";
             for(auto it : order)
@@ -927,7 +920,8 @@ bool Planner::processObject(int o,
                             const std::vector<int>             &done_objs,
                             PlanningContext                    &planCtx,
                             std::vector<ReloPush::State>       &arrival_poses,
-                            std::vector<ReloPush::StatePathPtr> &transit_paths)
+                            std::vector<ReloPush::StatePathPtr> &transit_paths,
+                            std::vector<ReloPush::State>& robots)
 {
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);
     const ObjectState* s1 = STATE_OBJECT(goal,       o);
@@ -945,7 +939,7 @@ bool Planner::processObject(int o,
             prepush_th
         );
     } else {
-        transit_start = ReloPush::State(0.1, 0.1, 0.2);
+        transit_start = robots[0];
     }
 
     // 2) Prepare exclusion list of (i,j) index pairs
@@ -981,8 +975,6 @@ bool Planner::processObject(int o,
         recordCollisions(o, bestInterp, state_curr,
                          idxes_collide, collision_pose);
 
-
-
         // 6) If collisions → attempt clearance
         if (!idxes_collide.empty())
         {
@@ -1000,6 +992,19 @@ bool Planner::processObject(int o,
                 // and try the next Dubins
                 continue;
             }
+        }
+        else
+        {
+            // transit from robot todo: plan dubins in robot perspective
+            ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
+            auto ph0 = planHybridAstar(transit_start, obj_app, planCtx, true);
+            if (ph0->validity != PlanValidity::success)
+            {
+                std::cout << "\tApproaching failed. Trying other start/goal poses" << std::endl;
+                excluded.emplace_back(std::make_pair(chosen_i, chosen_j));
+                continue;
+            }
+            transit_paths.push_back(ph0->getPathPtr(true));
         }
 
         // 7) Success: append to final path & record arrival

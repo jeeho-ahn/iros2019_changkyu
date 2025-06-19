@@ -289,7 +289,8 @@ private:
                        const std::vector<int> &done_objs,
                        PlanningContext &planCtx,
                        std::vector<ReloPush::State>& arrival_poses,
-                       std::vector<ReloPush::StatePathPtr>& transit_paths);
+                       std::vector<ReloPush::StatePathPtr>& transit_paths,
+                       std::vector<ReloPush::State>& robots);
 
     void appendInitialState(int o,
                              const ob::State* state_curr,
