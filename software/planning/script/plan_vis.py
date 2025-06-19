@@ -140,4 +140,5 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python visualize_plan_poses.py path/to/result.res")
         sys.exit(1)
+        
     main(sys.argv[1])

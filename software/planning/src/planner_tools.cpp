@@ -586,11 +586,14 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                 state_c->setYaw(wp.yaw);
                 path_tmp.append(state_clear);
             }
+
+            // update planning context for hybrid astar
+            planCtx.removeObs(selected_cand.obs_start);
+            planCtx.addObs(straight_path.back());
         }
 
         // *** Copy back into your “live” planning state ***
         si_all4all_->copyState(state_curr, state_clear);
-
 
         si_all4all_->freeState(state_clear);
     }
@@ -800,24 +803,25 @@ bool Planner::planSequence(const std::vector<int> &order,
                            std::vector<ReloPush::StatePathPtr>& transit_paths)
 {
     std::vector<ReloPush::State> arrival_poses(0);
+
+
+    // create planning context (update delivered objs) for hybrid astar
+    WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
+    std::unordered_map<std::string, ObjectInfo> objects_relopush;
+    std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
+
+    std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
+    PlanningParameters params(1.41,0.8,0.1,0.3,0.15,0.54,0.3,0.2);
+    params.setBoundary(boundary);
+
+    populateMaps(defs_, start, goal, done_objs, objects_relopush, goals_relopush, delivered_objs);
+    PlanningContext planCtx(params, objects_relopush, delivered_objs);
+
+    const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
+    const double clearance_margin = planCtx.parameters.obs_rad*2;
     
     for (int o : order) {
         env_.setParamSingleForAll(o, done_objs, state_curr);
-        // create planning context (update delivered objs) for hybrid astar
-        WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
-        std::unordered_map<std::string, ObjectInfo> objects_relopush;
-        std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
-
-        std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
-        PlanningParameters params(1.41,0.8,0.1,0.3,0.15,0.54,0.3,0.2);
-        params.setBoundary(boundary);
-
-        populateMaps(defs_, start, goal, done_objs, objects_relopush, goals_relopush, delivered_objs);
-        PlanningContext planCtx(params, objects_relopush, delivered_objs);
-
-        const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
-        const double clearance_margin = planCtx.parameters.obs_rad;
-
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
                            clearance_margin, done_objs,
