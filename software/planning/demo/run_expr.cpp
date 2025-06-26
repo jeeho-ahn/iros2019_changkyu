@@ -50,21 +50,47 @@ int main(int argc, char* argv[])
     name_planner = "plrs";
     vis = true;
     skip = false;
-    ns = {5}; // num of object
+    ns = {6}; // num of object
     ks = {1};
 
     std::string fp_init, fp_goal;
-    char fp_res[256];
+    string dp_root = cmake_dir;
+    //char fp_res[256];
+
+    std::string inst_file;
+    size_t inst_idx = 0;
+    bool use_single = false;
+
+    if (argc == 1)
+    {
+        // no args: keep the old two-file behavior
+        //fp_init = dp_root + "/input/relopush/input_6obj.init";
+        fp_init = dp_root + "/input/relopush/iros_obj6.txt";
+        fp_goal = dp_root + "/input/relopush/output_6obj.goal";
+    }
+    else if (argc == 3)
+    {
+        // two args: single-file mode
+        inst_file = argv[1];
+        inst_idx = std::stoul(argv[2]);
+        use_single = true;
+
+        fp_init = dp_root + "/input/relopush/" + inst_file;
+    }
+    else
+    {
+        std::cerr << "Usage:\n"
+                  << "  " << argv[0] << "                     # old init/goal mode\n"
+                  << "  " << argv[0] << " <file> <instance#>   # single-file mode\n";
+        return EXIT_FAILURE;
+    }
 
     /*
     sprintf(fp_init,"%s/input/%s/%s.n%d.%03d.init",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, i);
     sprintf(fp_goal,"%s/input/%s/%s.n%d.%03d.goal",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, 1);
     sprintf(fp_res,"%s/result/%s/now/%s/%s.%s.n%d.%03d.id%03d.res", dp_root.c_str(), name_experiment.c_str(), name_planner.c_str(), name_planner.c_str(), "dove_beauty_bar", n_objs, i, id);
     */
-    // manual file name
-    string dp_root = cmake_dir;
-    fp_init = dp_root + "/input/relopush/input_6obj.init";
-    fp_goal = dp_root + "/input/relopush/output_6obj.goal";
+
 
     // preset
     int relopush_n = 6; // or whatever you choose
@@ -84,6 +110,9 @@ int main(int argc, char* argv[])
     name_experiment = "tabletop_kuka";
     */
 
+    // override
+    fp_init = dp_root + "/input/relopush/iros_obj6.txt";
+
     if( name_planner.compare("ours_selfish")==0 )
     {
         do_merge = false;
@@ -101,6 +130,7 @@ int main(int argc, char* argv[])
     }
 */        
     //for( int i=1; i<=i_max; i++ )
+    /*
     for (auto instance : ks)
     {
         runObjectLoop(
@@ -116,6 +146,20 @@ int main(int argc, char* argv[])
             do_merge,
             box_width, box_height);
     }
+            */
+
+    runObjectLoop(
+        inst_idx, id,
+        ns,
+        dp_root,
+        name_experiment,
+        name_planner,
+        fp_init, fp_goal,
+        skip,
+        vis,
+        vis_height, vis_width,
+        do_merge,
+        box_width, box_height);
 
     return 0;
 }

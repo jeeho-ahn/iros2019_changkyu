@@ -117,29 +117,31 @@ bool Planner::findBestDubins(int o,
 */
 
 bool Planner::findBestDubins(int o,
-                             const ReloPush::State s0,
-                             const ReloPush::State s1,
+                             const ReloPush::State object_start,
+                             const ReloPush::State object_goal,
                              double turning_rad,
                              reloDubinsPath &bestDubins,
                              ReloPush::StatePathPtr &bestInterp,
                              double interpResolution,
-                             const std::vector<std::pair<int,int>> &excludedIndices,
+                             const std::vector<std::pair<int, int>> &excludedIndices,
                              int &chosen_i,
-                             int &chosen_j) const
+                             int &chosen_j,
+                             PlanningContext &planCtx) const
 {
+    // todo: parse from param
+    float prepush_th = Constants::prepush_th;
+
     // Precompute the 4×4 yaw combinations
     std::vector<double> yaws_start = {
-        s0.yaw,
-        s0.yaw + M_PI_2,
-        s0.yaw + M_PI,
-        s0.yaw + 3.0*M_PI_2
-    };
+        object_start.yaw,
+        object_start.yaw + M_PI_2,
+        object_start.yaw + M_PI,
+        object_start.yaw + 3.0 * M_PI_2};
     std::vector<double> yaws_goal = {
-        s1.yaw,
-        s1.yaw + M_PI_2,
-        s1.yaw + M_PI,
-        s1.yaw + 3.0*M_PI_2
-    };
+        object_goal.yaw,
+        object_goal.yaw + M_PI_2,
+        object_goal.yaw + M_PI,
+        object_goal.yaw + 3.0 * M_PI_2};
 
     // Workspace bounds
     const double xmin = 0, xmax = 4;
@@ -153,7 +155,7 @@ bool Planner::findBestDubins(int o,
     for (int i = 0; i < (int)yaws_start.size(); ++i)
     {
         double y0 = yaws_start[i];
-        ReloPush::State ds0(s0.x, s0.y, y0);
+        ReloPush::State ds0(object_start.x, object_start.y, y0);
 
         // approach check to ds0 (fixed: do this in the later stage)
         //auto ds0_prepush = ReloPush::find_pre_push(
@@ -176,10 +178,15 @@ bool Planner::findBestDubins(int o,
             }
 
             double y1 = yaws_goal[j];
-            ReloPush::State ds1(s1.x, s1.y, y1);
+            ReloPush::State ds1(object_goal.x, object_goal.y, y1);
+
+            // robot-centric
+            ReloPush::State robot_start = ReloPush::find_pre_push(ds0, prepush_th);
+            ReloPush::State robot_goal = ReloPush::find_pre_push(ds1, prepush_th);
 
             // 2) Generate the raw Dubins candidate
-            auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
+            //auto candidate = findDubins(ds0, ds1, turning_rad, /*reverse=*/false);
+            auto candidate = findDubins(robot_start, robot_goal, turning_rad, /*reverse=*/false);
             if (candidate.omplDubins.length() == std::numeric_limits<double>::max())
                 continue;
 
@@ -435,7 +442,7 @@ bool Planner::dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCan
                            const std::vector<int>& idxes_collide,
                            const ReloPush::State transit_end)
 {
-    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
+    float prepush_th = Constants::prepush_th;
     if (obsIdx == allCands.size())
     {
         // last transit to the object to rearrange
@@ -499,7 +506,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
     const double step_size = 0.05;
     const int max_steps = 40;
-    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
+    float prepush_th = Constants::prepush_th;
 
     ob::State* scratch = si_single4clear_->allocState();
     auto* so_scratch = scratch->as<ObjectState>();
@@ -811,7 +818,12 @@ bool Planner::planSequence(const std::vector<int> &order,
     std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
 
     std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
-    PlanningParameters params(1.41,0.8,0.1,0.3,0.15,0.54,0.3,0.2);
+    PlanningParameters params(Constants::r_push, Constants::r_nonpush,
+                                Constants::mapResolution,
+                            Constants::carWidth,
+                            Constants::obsRadius,
+                            Constants::LF_push, Constants::LF_nonpush,
+                            Constants::LB);
     params.setBoundary(boundary);
 
     populateMaps(defs_, start, goal, done_objs, objects_relopush, goals_relopush, delivered_objs);
@@ -925,10 +937,10 @@ bool Planner::processObject(int o,
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);
     const ObjectState* s1 = STATE_OBJECT(goal,       o);
 
-    ReloPush::State s0_relopush = ReloPush::State(s0->getX(),s0->getY(),s0->getYaw());
-    ReloPush::State s1_relopush = ReloPush::State(s1->getX(),s1->getY(),s1->getYaw());
+    ReloPush::State obj_start_relopush = ReloPush::State(s0->getX(),s0->getY(),s0->getYaw());
+    ReloPush::State obj_goal_relopush = ReloPush::State(s1->getX(),s1->getY(),s1->getYaw());
 
-    float prepush_th = (planCtx.parameters.LF_push + planCtx.parameters.obs_rad) * 1.01;
+    float prepush_th = Constants::prepush_th;
 
     // 1) Determine starting point for transit
     ReloPush::State transit_start;
@@ -952,12 +964,13 @@ bool Planner::processObject(int o,
         ReloPush::StatePathPtr bestInterp(new ReloPush::StatePath);
 
         bool gotOne = findBestDubins(
-            o, s0_relopush, s1_relopush, turningRad,
+            o, obj_start_relopush, obj_goal_relopush, turningRad,
             bestDubins, bestInterp,
             planCtx.parameters.map_resolution,
             excluded,    // skip these index pairs
             chosen_i,    // OUT: start‐index in yaws_start
-            chosen_j     // OUT: goal‐index  in yaws_goal
+            chosen_j,     // OUT: goal‐index  in yaws_goal
+            planCtx
         );
 
         if (!gotOne)
@@ -976,6 +989,7 @@ bool Planner::processObject(int o,
 
 
         ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
+        //ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState, 0.1); // already pre-pushed
 
         // 6) If collisions → attempt clearance
         if (!idxes_collide.empty())

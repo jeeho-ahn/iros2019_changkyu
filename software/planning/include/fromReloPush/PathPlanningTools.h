@@ -73,8 +73,13 @@ namespace Constants {
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
-    static float r_push = L / tanf(fabs(steer_limit_push));
-    static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
+    //static float r_push = L / tanf(fabs(steer_limit_push));
+    //static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
+
+    static float r_push = 1.41f;
+    static float r_nonpush = 0.8f;
+
+
     //extern float r; // non-push as default
     //static float r = 0.5;
     //static const float r = 3;
@@ -110,10 +115,10 @@ namespace Constants {
     // width of car
     static const float carWidth = 0.285;
     // obstacle default radius
-    static const float obsRadius = 0.075;
+    static const float obsRadius = 0.075 * sqrt(2);
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.38;  //0.38
-    static const float LF_push = 0.54; //LF_nonpush + obsRadius; // 0.65
+    static const float LF_push = LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
     static const float LB = 0.12;
     static const float prepush_th = LF_push * 1.01;

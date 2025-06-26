@@ -51,6 +51,8 @@ struct PlanningParameters
 
     PlanningParameters()
     {}    
+
+    // r_push, r_nonpush, map_res, car_w, obs_r, LF_push, LF_nonpush, LB
     PlanningParameters(float r_push, float r_nonpush, float map_resol, float car_w, float obs_r, float LF_p, float LF_np, float LB_)
     : map_resolution(map_resol), car_width(car_w), obs_rad(obs_r), LF_push(LF_p), LF_nonpush(LF_np), LB(LB_)
     {

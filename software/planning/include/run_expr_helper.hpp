@@ -1,29 +1,29 @@
 #ifndef RUN_EXPR_HELPER_HPP
 #define RUN_EXPR_HELPER_HPP
 
-#include <iostream>
-#include <fstream>
-#include <yaml-cpp/yaml.h>
 
-#include <boost/program_options.hpp>
-#include <boost/filesystem.hpp>
-#define BOOST_LOG_DYN_LINK 1
-#include <boost/log/trivial.hpp>
-#define LOG BOOST_LOG_TRIVIAL(trace)
 
-#include "../include/planner.hpp"
-#include <config.h>
+#include <InstanceParser.hpp>
 
-namespace po = boost::program_options;
-namespace fs = boost::filesystem;
-namespace ob = ompl::base;
-namespace og = ompl::geometric;
 
 using namespace std;
 
 const std::string cmake_dir = std::string(CMAKE_SOURCE_DIR);
 
 namespace fs = boost::filesystem;
+
+struct ObjectGoalPair
+{
+    std::string objectName;
+    std::string goalName;
+
+    ObjectGoalPair()
+    {}
+
+    ObjectGoalPair(std::string obj, std::string goal)
+        : objectName(obj), goalName(goal)
+    {}
+};
 
 // 1) build the list of identical objects
 static std::vector<RobotObjectSetup::Object> makeObjects(int n_objs, double box_width, double box_height)
@@ -294,9 +294,11 @@ static void runObjectLoop(
                   << "[READ] " << fp_goal << "\n";
 
         // 4) allocate & load states
-        auto [state_init, state_goal] = allocateAndLoad(env.get(), fp_init, fp_goal, n_objs);
+        //auto [state_init, state_goal] = allocateAndLoad(env.get(), fp_init, fp_goal, n_objs);
 
+        auto [state_init, state_goal] = allocateAndLoadSingle(env.get(), fp_init, /*line=*/instance, /*n_objs=*/n_objs);
 
+    
         // 5) special bluebox rematch
         if (name_experiment == "bluebox_kuka" ||
             name_experiment == "rectbox_kuka")

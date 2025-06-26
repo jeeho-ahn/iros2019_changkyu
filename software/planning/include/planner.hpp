@@ -216,15 +216,17 @@ private:
                         */
 
     bool findBestDubins(int o,
-                        const ReloPush::State s0,
-                        const ReloPush::State s1,
+                        const ReloPush::State object_start,
+                        const ReloPush::State object_goal,
                         double turning_rad,
                         reloDubinsPath &bestDubins,
                         ReloPush::StatePathPtr &bestInterp,
                         double interpResolution,
-                        const std::vector<std::pair<int,int>> &excludedIndices,
+                        const std::vector<std::pair<int, int>> &excludedIndices,
                         int &chosen_i,
-                        int &chosen_j) const;
+                        int &chosen_j,
+                        PlanningContext &planCtx) const;
+                        
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
                           const ReloPush::StatePathPtr &interp,
