@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     id = 0;
     name_experiment = "relopush";
     name_planner = "plrs";
-    vis = true;
+    vis = false;
     skip = false;
     ns = {6}; // num of object
     ks = {1};
@@ -76,6 +76,8 @@ int main(int argc, char* argv[])
         use_single = true;
 
         fp_init = dp_root + "/input/relopush/" + inst_file;
+
+        std::cout << "=== " << inst_file << ": " << inst_idx << " ===" << std::endl;
     }
     else
     {

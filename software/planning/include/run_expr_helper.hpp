@@ -333,6 +333,44 @@ static void runObjectLoop(
         std::cout << "Result path length: "
                   << path.length() << std::endl;
 
+
+
+        // Print summary
+        double total_path_length = 0.0;
+        double action1_length = 0.0;
+        for (size_t i = 1; i < actions.size(); ++i) {
+            // Compute distance between consecutive actions
+            double dx = actions[i].x - actions[i-1].x;
+            double dy = actions[i].y - actions[i-1].y;
+            double segment_length = std::sqrt(dx*dx + dy*dy);
+
+            total_path_length += segment_length;
+            // If previous action is ACTION_TRANSFER (type 1)
+            if (actions[i-1].type == Planner::TYPE_ACTION::ACTION_TRANSFER) {
+                action1_length += segment_length;
+            }
+        }
+
+        std::cout << "\n\t---------- Results ----------" << std::endl;
+        std::cout << "Total path length: " << total_path_length << std::endl;
+        std::cout << "Path length for action type 1: " << action1_length << std::endl;
+        std::cout << "Planning Time: " << elapsed << std::endl;
+
+
+        // Save summary statistics to a file
+        std::string resultStatFile = dp_root + "/results_obj" + std::to_string(n_objs) + ".txt";
+        std::cout << "Saving to: " << resultStatFile << std::endl;
+        std::ofstream fout_stat(resultStatFile.c_str(), std::ios::app);
+        fout_stat << "===\n";
+        fout_stat << "index:" << instance << "\n";
+        fout_stat << "planning_time(s):" << elapsed << "\n";
+        fout_stat << "total_length(m):" << total_path_length << "\n";
+        fout_stat << "transfer_length(m):" << action1_length << "\n";
+        fout_stat.close();
+
+
+
+
         // 8) optional visualization
         if (vis)
         {
