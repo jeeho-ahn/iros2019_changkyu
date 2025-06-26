@@ -116,7 +116,7 @@ namespace Constants {
     static const float LF_push = 0.54; //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
     static const float LB = 0.12;
-
+    static const float prepush_th = LF_push * 1.01;
 
     // R = 3, 6.75 DEG
     //extern double dx[];

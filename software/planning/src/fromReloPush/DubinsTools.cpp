@@ -212,8 +212,8 @@ reloDubinsPath findDubins(ReloPush::State start, ReloPush::State goal, double tu
     // inherited class
     reloDubinsPath dubinsPath(start,goal,dPath,turning_radius);
 
-    dubinsStart->setXY(start.x, start.y);
-    dubinsStart->setYaw(-start.yaw);
+    //dubinsStart->setXY(start.x, start.y);
+    //dubinsStart->setYaw(-start.yaw);
 
     if(print_type)
     {
