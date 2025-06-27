@@ -34,6 +34,28 @@
     */
 /////////////////
 
+
+
+int count_objects_in_mo_section(const std::string& line) {
+    size_t mo_start = line.find("mo:");
+    if (mo_start == std::string::npos) return 0;
+
+    size_t mo_end = line.find('!', mo_start);
+    std::string mo_section = line.substr(mo_start + 3, mo_end - (mo_start + 3));
+
+    std::stringstream ss(mo_section);
+    std::string object_entry;
+    int count = 0;
+
+    while (std::getline(ss, object_entry, ';')) {
+        if (!object_entry.empty()) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 int main(int argc, char* argv[])
 {
     int id;
@@ -50,7 +72,7 @@ int main(int argc, char* argv[])
     name_planner = "plrs";
     vis = false;
     skip = false;
-    ns = {6}; // num of object
+    ns = {8}; // num of object
     ks = {1};
 
     std::string fp_init, fp_goal;
@@ -87,6 +109,14 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    std::ifstream infile(fp_init.c_str());
+    std::string line;
+    std::getline(infile,line);
+    int num_of_obj = count_objects_in_mo_section(line);
+
+    ns = {num_of_obj};
+
+
     /*
     sprintf(fp_init,"%s/input/%s/%s.n%d.%03d.init",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, i);
     sprintf(fp_goal,"%s/input/%s/%s.n%d.%03d.goal",                 dp_root.c_str(), name_experiment.c_str(), "dove_beauty_bar", n_objs, 1);
@@ -94,6 +124,7 @@ int main(int argc, char* argv[])
     */
 
 
+    /*
     // preset
     int relopush_n = 6; // or whatever you choose
     try {
@@ -103,6 +134,7 @@ int main(int argc, char* argv[])
         std::cerr << "[ERROR] " << e.what() << std::endl;
         return 1;
     }
+    */
 
     // override
     /*
@@ -113,7 +145,9 @@ int main(int argc, char* argv[])
     */
 
     // override
-    fp_init = dp_root + "/input/relopush/iros_obj6.txt";
+    //fp_init = dp_root + "/input/relopush/iros_obj6.txt";
+
+
 
     if( name_planner.compare("ours_selfish")==0 )
     {
