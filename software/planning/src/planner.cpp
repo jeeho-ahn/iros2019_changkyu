@@ -2073,12 +2073,13 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
     ob::State* state_curr = si_all4all_->allocState();
     og::PathGeometric best_path(si_all4all_);
     std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
+    std::vector<int> done_objs(0);
 
     // try all permutations until success
     do {
         si_all4all_->copyState(state_curr, start);
         og::PathGeometric path_tmp(si_all4all_);
-        std::vector<int> done_objs;
+
         std::vector<ReloPush::StatePathPtr> transit_paths;
         transit_paths.clear();
 
@@ -2106,6 +2107,10 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
         std::cout << "\nFinished Planning: ";
         for(auto it : order_objs)
             std::cout << it << "->";
+
+        std::cout << "\n";
+        for(auto it : done_objs)
+            std::cout << it << ",";
 
         std::cout << "done" << std::endl;
     }

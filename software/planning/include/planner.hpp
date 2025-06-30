@@ -311,7 +311,7 @@ private:
                        og::PathGeometric &path_tmp,
                        double turningRad,
                        double clearance_margin,
-                       const std::vector<int> &done_objs,
+                       std::vector<int> &done_objs,
                        PlanningContext &planCtx,
                        std::vector<ReloPush::State>& arrival_poses,
                        std::vector<ReloPush::StatePathPtr>& transit_paths,
