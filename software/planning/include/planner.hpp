@@ -341,7 +341,8 @@ private:
     void appendDubinsSegment(int o,
                              const ReloPush::StatePathPtr &interp,
                              ob::State *state_curr,
-                             og::PathGeometric &path_tmp);
+                             og::PathGeometric &path_tmp,
+                             double pre_push_dist);
 
     RobotObjectSetup &env_;
     std::vector<RobotObjectSetup::Object> defs_; // jeeho

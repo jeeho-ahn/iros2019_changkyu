@@ -1023,7 +1023,7 @@ bool Planner::processObject(int o,
         }
 
         // 7) Success: append to final path & record arrival
-        appendDubinsSegment(o, bestInterp, state_curr, path_tmp);
+        appendDubinsSegment(o, bestInterp, state_curr, path_tmp, prepush_th);
         arrival_poses.push_back(bestDubins.targetState);
         return true;
     }
@@ -1072,21 +1072,44 @@ void Planner::appendWaypoints(int o,
 void Planner::appendDubinsSegment(int o,
                                   const ReloPush::StatePathPtr &interp,
                                   ob::State *state_curr,
-                                  og::PathGeometric &path_tmp)
+                                  og::PathGeometric &path_tmp,
+                                  double pre_push_dist)
 {
     // For every waypoint on the selfish Dubins path...
+//    for (const auto &wp : *interp)
+//    {
+//        // 1) set the robot‐index to object o
+//        STATE_ROBOT(state_curr) = o;
+
+//        // 2) overwrite exactly that object’s pose
+//        ObjectState* so = STATE_OBJECT(state_curr, o);
+//        so->setX  (wp.x);
+//        so->setY  (wp.y);
+//        so->setYaw(wp.yaw);
+
+//        // 3) append ONLY this new state
+//        path_tmp.append(state_curr);
+//    }
+
     for (const auto &wp : *interp)
     {
-        // 1) set the robot‐index to object o
+        // 0) which object we’re pushing
         STATE_ROBOT(state_curr) = o;
 
-        // 2) overwrite exactly that object’s pose
-        ObjectState* so = STATE_OBJECT(state_curr, o);
-        so->setX  (wp.x);
-        so->setY  (wp.y);
-        so->setYaw(wp.yaw);
+        // 1) compute the object’s new pose by “pushing” the robot waypoint forward
+        //    (wp is the robot pose; pushDistance is how far the object moves)
+        ReloPush::State objPose = ReloPush::find_post_push(
+            const_cast<ReloPush::State&>(wp),
+            static_cast<float>(pre_push_dist)
+        );
 
-        // 3) append ONLY this new state
+        // 2) overwrite exactly that object’s pose in the OMPL state
+        ObjectState* so = STATE_OBJECT(state_curr, o);
+        so->setX  (objPose.x);
+        so->setY  (objPose.y);
+        so->setYaw(objPose.yaw);
+
+        // 3) record this updated state
         path_tmp.append(state_curr);
     }
 }
