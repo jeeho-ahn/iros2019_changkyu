@@ -847,6 +847,7 @@ bool Planner::planSequence(const std::vector<int> &order,
             }
 
             std::cout << "] failed at " << o << ". Trying next permutation" << std::endl;
+            done_objs.clear();
             return false; // current sequence has no solution. try different permutation
         }
 
@@ -986,6 +987,25 @@ bool Planner::processObject(int o,
         std::unordered_map<int, ReloPush::State> collision_pose;
         recordCollisions(o, bestInterp, state_curr,
                          idxes_collide, collision_pose);
+
+        // fail if any finished object collides with this
+        bool has_common = std::any_of(idxes_collide.begin(), idxes_collide.end(), [&](int val) {
+              return std::find(done_objs.begin(), done_objs.end(), val) != done_objs.end();
+          });
+
+          if (has_common) {
+              std::cout << "Finished object is on the way." << std::endl;
+              for (int val : done_objs) {
+                  std::cout << val << " ";
+              }
+              std::cout << std::endl;
+
+              std::cout << "col: ";
+              for (int n : idxes_collide) {
+                  std::cout << n << " ";
+              }
+              return false;
+          }
 
 
         ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);

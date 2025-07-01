@@ -358,7 +358,7 @@ static void runObjectLoop(
 
 
         // Save summary statistics to a file
-        std::string resultStatFile = dp_root + "/results_obj" + std::to_string(n_objs) + ".txt";
+        std::string resultStatFile = dp_root + "/result/jeeho/results_obj" + std::to_string(n_objs) + ".txt";
         std::cout << "Saving to: " << resultStatFile << std::endl;
         std::ofstream fout_stat(resultStatFile.c_str(), std::ios::app);
         fout_stat << "===\n";
@@ -368,6 +368,7 @@ static void runObjectLoop(
         fout_stat << "transfer_length(m):" << action1_length << "\n";
         fout_stat.close();
 
+        std::cout << "file saved" << std::endl;
 
 
 
