@@ -112,6 +112,10 @@ add_executable(train_rotator
   demo/train_rotator.cpp
 )
 
+add_executable(test_dubins_rrt
+    test/test_dubins_rrt.cpp
+    )
+
 target_link_libraries(${PROJECT_NAME}  
   ${OMPL_LIBRARIES}
   ${BULLET_LIBRARIES}
@@ -151,3 +155,9 @@ target_link_libraries(train_rotator
   ${Boost_LIBRARIES}
   yaml-cpp
 )
+
+target_link_libraries(test_dubins_rrt
+    ${PROJECT_NAME}
+    ${Boost_LIBRARIES}
+    )
+
