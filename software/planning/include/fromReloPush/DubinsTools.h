@@ -68,6 +68,11 @@ public:
         return turning_rad;
     }
 
+    void set_turning_radius(float turnR)
+    {
+        turning_rad = turnR;
+    }
+
     ReloPush::StatePathPtr interpolate(float resolution)
     {
         auto l = lengthCost(); // unit cost * turning rad

@@ -4,13 +4,13 @@ project(changkyu_planner_pushing)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(ENABLE_ASAN "Build with AddressSanitizer (+leak detector)" OFF)
+#option(ENABLE_ASAN "Build with AddressSanitizer (+leak detector)" OFF)
 
-if (ENABLE_ASAN)
+#if (ENABLE_ASAN)
     # Make sure every object file AND the final link are built with ASan.
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
-    add_link_options    (-fsanitize=address)
-endif()
+#    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+#    add_link_options    (-fsanitize=address)
+#endif()
 
 # CMake Path
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h @ONLY)

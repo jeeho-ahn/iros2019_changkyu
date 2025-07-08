@@ -68,16 +68,16 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.185; // 0.185
-    static float steer_limit_nonpush = 0.26; // 0.28
+    static float steer_limit_push = 0.2; // 0.185
+    static float steer_limit_nonpush = 0.28; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
-    //static float r_push = L / tanf(fabs(steer_limit_push));
-    //static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
+    static float r_push = L / tanf(fabs(steer_limit_push));
+    static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
 
-    static float r_push = 1.41f;
-    static float r_nonpush = 0.8f;
+    //static float r_push = 1.41f;
+    //static float r_nonpush = 0.8f;
 
 
     //extern float r; // non-push as default
@@ -115,7 +115,9 @@ namespace Constants {
     // width of car
     static const float carWidth = 0.285;
     // obstacle default radius
-    static const float obsRadius = 0.075 * sqrt(2);
+    static const float obsHalfSide = 0.075;
+    static const float obsRadius = obsHalfSide * sqrt(2);
+    static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.38;  //0.38
     static const float LF_push = LF_nonpush + obsRadius; // 0.65
@@ -202,8 +204,10 @@ typedef std::shared_ptr<PathPlanResult> PathPlanResultPtr;
 // bool and reason
 struct StateValiditySet{
     std::pair<bool, StateValidity> data;
+    ReloPush::State collidingPose;
 
     StateValiditySet(bool is_valid, StateValidity validity) : data(is_valid,validity) {}
+    StateValiditySet(bool is_valid, StateValidity validity, ReloPush::State col) : data(is_valid,validity), collidingPose(col) {}
 
     operator bool() const {
         return data.first;
@@ -819,6 +823,7 @@ public:
     }
 
 
+
     StateValiditySet stateValid(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
                                 float LF = Constants::LF_push, float LB = Constants::LB) {
 
@@ -882,7 +887,7 @@ public:
 
             // Collision if the distance is less than the obstacle's radius.
             if (dx*dx + dy*dy <= obs_rad * obs_rad) {
-                return StateValiditySet(false, StateValidity::collision);
+                return StateValiditySet(false, StateValidity::collision,*it);
             }
 
         }

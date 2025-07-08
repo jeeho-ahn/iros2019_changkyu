@@ -2062,7 +2062,9 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
 bool Planner::plan_plrs_jeeho(const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
-                              std::vector<Action> &actions_res)
+                              std::vector<Action> &actions_res,
+                              std::vector<int> &num_cleared,
+                              const bool use_rrt)
 {
     LOG << "plan started (plrs_jeeho)";
 
@@ -2074,6 +2076,7 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
     og::PathGeometric best_path(si_all4all_);
     std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
     std::vector<int> done_objs(0);
+    num_cleared.clear();
 
     // try all permutations until success
     do {
@@ -2086,8 +2089,8 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
         //std::cout << "preplan" << std::endl;
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
-                         done_objs,
-                        transit_paths))
+                         done_objs, num_cleared,
+                        transit_paths, use_rrt))
         {
             best_path = path_tmp;
             best_transit_paths = transit_paths;

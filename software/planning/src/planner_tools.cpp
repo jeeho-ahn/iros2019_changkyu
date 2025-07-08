@@ -225,6 +225,275 @@ bool Planner::findBestDubins(int o,
     return foundAny;
 }
 
+
+struct Vec2 {
+    double x, y;
+    Vec2(double _x=0, double _y=0): x(_x), y(_y) {}
+};
+inline double dot(const Vec2 &a, const Vec2 &b) { return a.x*b.x + a.y*b.y; }
+
+/// Oriented rectangle (centered at cx,cy, rotated by yaw)
+/// halfLen: half‐length along the local x‐axis (forward/backward)
+/// halfWid: half‐width along local y‐axis (sideways)
+struct OrientedRect {
+    double cx, cy, yaw, halfLen, halfWid;
+
+    OrientedRect(double _cx, double _cy, double _yaw, double fullLen, double fullWid)
+      : cx(_cx), cy(_cy), yaw(_yaw),
+        halfLen(fullLen/2.0), halfWid(fullWid/2.0)
+    {}
+
+    // SAT‐based test: do these two oriented rectangles intersect?
+    bool intersects(const OrientedRect &o) const {
+        // local axes for each rect
+        Vec2 ux1(std::cos(yaw), std::sin(yaw)), uy1(-ux1.y, ux1.x);
+        Vec2 ux2(std::cos(o.yaw), std::sin(o.yaw)), uy2(-ux2.y, ux2.x);
+        // vector between centers
+        Vec2 d(o.cx - cx, o.cy - cy);
+
+        auto overlapOnAxis = [&](const Vec2 &axis,
+                                 const Vec2 &uaxA, const Vec2 &uayA,
+                                 double hAxA, double hAyA,
+                                 const Vec2 &uaxB, const Vec2 &uayB,
+                                 double hAxB, double hAyB){
+            double rA = hAxA * std::fabs(dot(axis, uaxA))
+                      + hAyA * std::fabs(dot(axis, uayA));
+            double rB = hAxB * std::fabs(dot(axis, uaxB))
+                      + hAyB * std::fabs(dot(axis, uayB));
+            double dist = std::fabs(dot(axis, d));
+            return dist <= (rA + rB);
+        };
+
+        // test all four separating axes
+        return overlapOnAxis(ux1, ux1, uy1, halfLen, halfWid, ux2, uy2, o.halfLen, o.halfWid)
+            && overlapOnAxis(uy1, ux1, uy1, halfLen, halfWid, ux2, uy2, o.halfLen, o.halfWid)
+            && overlapOnAxis(ux2, ux1, uy1, halfLen, halfWid, ux2, uy2, o.halfLen, o.halfWid)
+            && overlapOnAxis(uy2, ux1, uy1, halfLen, halfWid, ux2, uy2, o.halfLen, o.halfWid);
+    }
+};
+
+/// Convert a list of obstacle poses (x,y,yaw) into OrientedRect boxes of the given size
+static std::vector<OrientedRect> makeOrientedObstacles(
+    const std::vector<ReloPush::State> &obsStates,
+    double fullLength,
+    double fullWidth)
+{
+    std::vector<OrientedRect> rects;
+    rects.reserve(obsStates.size());
+    for (const auto &st : obsStates) {
+        // st.x, st.y, st.yaw come from your raw State
+        rects.emplace_back(
+            st.x,
+            st.y,
+            st.yaw,
+            fullLength,
+            fullWidth
+        );
+    }
+    return rects;
+}
+
+bool Planner::findBestDubinsRRTstar(int o,
+                                    const ReloPush::State object_start,
+                                    const ReloPush::State object_goal,
+                                    double turning_rad,
+                                    reloDubinsPath & bestPathMeta,       // unused in RRT*
+                                    ReloPush::StatePathPtr &bestInterp,
+                                    double /*interpResolution*/,           // we’ll extract path from OMPL
+                                    const std::vector<std::pair<int,int>> &excludedIndices,
+                                    int &chosen_i,
+                                    int &chosen_j,
+                                    PlanningContext &planCtx,
+                                    ob::State *state_curr,
+                                    std::vector<int>& done_objs
+                                    ) const
+{
+       // static (arrived) obs
+       std::vector<ReloPush::State> static_obs;
+       for(int n=0; n<done_objs.size(); n++)
+       {
+           auto *so = STATE_OBJECT(state_curr,done_objs[n]);
+           static_obs.push_back(ReloPush::State(so->getX(),so->getY(),so->getYaw()));
+       }
+
+       auto obstacles = makeOrientedObstacles(static_obs,0.15,0.15);
+
+       bool debug = false;
+       if(done_objs.size()>0)
+           debug = true;
+
+       // todo: parse from param
+       float prepush_th = Constants::prepush_th;
+
+       // Precompute the 4×4 yaw combinations
+       std::vector<double> yaws_start = {
+           object_start.yaw,
+           object_start.yaw + M_PI_2,
+           object_start.yaw + M_PI,
+           object_start.yaw + 3.0 * M_PI_2};
+       std::vector<double> yaws_goal = {
+           object_goal.yaw,
+           object_goal.yaw + M_PI_2,
+           object_goal.yaw + M_PI,
+           object_goal.yaw + 3.0 * M_PI_2};
+
+       // Workspace bounds
+       const double xmin = 0, xmax = 4;
+       const double ymin = 0, ymax = 5.2;
+
+       double best_len = std::numeric_limits<double>::infinity();
+       bool foundAny  = false;
+       //PathPlanResultPtr best_transit;
+
+       // Loop over all index pairs (i,j)
+       for (int i = 0; i < (int)yaws_start.size(); ++i)
+       {
+           double y0 = yaws_start[i];
+           ReloPush::State ds0(object_start.x, object_start.y, y0);
+
+           for (int j = 0; j < (int)yaws_goal.size(); ++j)
+           {
+               // 1) Skip if this (i,j) was excluded
+               if (std::find(excludedIndices.begin(),
+                             excludedIndices.end(),
+                             std::make_pair(i,j))
+                   != excludedIndices.end())
+               {
+                   continue;
+               }
+
+               double y1 = yaws_goal[j];
+               ReloPush::State ds1(object_goal.x, object_goal.y, y1);
+
+               // robot-centric
+               ReloPush::State robot_start = ReloPush::find_pre_push(ds0, prepush_th);
+               ReloPush::State robot_goal = ReloPush::find_pre_push(ds1, prepush_th);
+
+
+               // setup planning space
+               ob::StateSpacePtr space =
+                   std::make_shared<ob::DubinsStateSpace>(turning_rad);
+
+               ob::RealVectorBounds bounds(2);
+               // 2) Set x limits (dimension 0)
+               bounds.setLow(0, xmin);
+               bounds.setHigh(0, xmax);
+
+               // 3) Set y limits (dimension 1)
+               bounds.setLow(1, ymin);
+               bounds.setHigh(1, ymax);
+
+               // extract for fast bounds checks
+               std::vector<float> low  = {xmin,ymin};
+               std::vector<float> high = {xmax,ymax};
+               space->as<ob::DubinsStateSpace>()->setBounds(bounds);
+
+               og::SimpleSetup ss(space);
+
+               double robotForward = planCtx.parameters.LF_push;
+               double robotBackward = planCtx.parameters.LB;
+
+               ss.setStateValidityChecker(
+                   [&](const ob::State* s) {
+                       const auto *se2 = s->as<ob::SE2StateSpace::StateType>();
+                       double x   = se2->getX();
+                       double y   = se2->getY();
+                       double yaw = se2->getYaw();
+
+                       // compute the geometric center of the robot box
+                       double halfLen     = (robotForward + robotBackward)/2.0;
+                       double centerShift = (robotForward - robotBackward)/2.0;
+                       double cx = x + centerShift * std::cos(yaw);
+                       double cy = y + centerShift * std::sin(yaw);
+
+                       // build the robot’s oriented rect
+                       OrientedRect robot(cx, cy, yaw,
+                                          robotForward + robotBackward,
+                                          planCtx.parameters.car_width);
+
+                       // quick world‐bounds check via projections onto X/Y
+                       Vec2 ux(std::cos(yaw), std::sin(yaw)),
+                            uy(-ux.y, ux.x);
+                       double ex = robot.halfLen * std::fabs(dot(ux, Vec2(1,0)))
+                                 + robot.halfWid * std::fabs(dot(uy, Vec2(1,0)));
+                       double ey = robot.halfLen * std::fabs(dot(ux, Vec2(0,1)))
+                                 + robot.halfWid * std::fabs(dot(uy, Vec2(0,1)));
+                       if (cx - ex < low[0] || cx + ex > high[0] ||
+                           cy - ey < low[1] || cy + ey > high[1])
+                           return false;
+
+                       // test against every obstacle
+                       for (auto &obs : obstacles)
+                           if (robot.intersects(obs))
+                               return false;
+
+                       return true;
+                   }
+               );
+
+               // 5) Start & goal
+               ob::ScopedState<> start(space), goal(space);
+               start->as<ob::SE2StateSpace::StateType>()->setX(robot_start.x);
+               start->as<ob::SE2StateSpace::StateType>()->setY(robot_start.y);
+               start->as<ob::SE2StateSpace::StateType>()->setYaw(robot_start.yaw);
+
+               goal->as<ob::SE2StateSpace::StateType>()->setX(robot_goal.x);
+               goal->as<ob::SE2StateSpace::StateType>()->setY(robot_goal.y);
+               goal->as<ob::SE2StateSpace::StateType>()->setYaw(robot_goal.yaw);
+               ss.setStartAndGoalStates(start, goal); // m
+
+               // 6) RRT* planner
+               auto planner = std::make_shared<og::RRTstar>(ss.getSpaceInformation());
+               planner->setGoalBias(0.2); // 20% of samples try the goal directly
+               planner->setRange(0.5);
+               ss.setPlanner(planner);
+
+               // 7) Solve
+               ss.setup();
+               ob::PlannerStatus solved = ss.solve(0.2);  // sec
+
+
+               //if (solved!=ompl::base::PlannerStatus::EXACT_SOLUTION)
+               if(!solved)
+               {
+                    continue;
+               }
+
+               // 3) copy path
+               ReloPush::StatePathPtr interp(new ReloPush::StatePath);
+               auto path = ss.getSolutionPath();
+               for (size_t i = 0; i < path.getStateCount(); ++i) {
+                   const auto *st = path.getState(i)->as<ob::SE2StateSpace::StateType>();
+                   interp->push_back(ReloPush::State(st->getX(),st->getY(),st->getYaw()));
+               }
+
+
+               // 5) Score by length
+               double L = path.length();
+               if (L < best_len) {
+                   reloDubinsPath tempMeta;
+                   tempMeta.startState = robot_start;
+                   tempMeta.targetState = robot_goal;
+                   tempMeta.set_turning_radius(turning_rad);
+
+                   best_len     = L;
+                   bestPathMeta   = tempMeta;
+                   bestInterp   = interp;
+                   chosen_i     = i;
+                   chosen_j     = j;
+                   foundAny     = true;
+                   //best_transit = ph0;
+               }
+           }
+       }
+
+       return foundAny;
+}
+
+
+
+
+
 //-----------------------------------------------------------------------------
 // 2) recordCollisions
 void Planner::recordCollisions(int o,
@@ -443,14 +712,25 @@ bool Planner::dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCan
                            const ReloPush::State transit_end)
 {
     float prepush_th = Constants::prepush_th;
-    if (obsIdx == allCands.size())
+    if (obsIdx == idxes_collide.size()) // if last
     {
+
         // last transit to the object to rearrange
         auto ph = planHybridAstar(transit_start, transit_end, planCtx, true);
         if (ph->validity != PlanValidity::success)
+        {
+            std::cout << "\t[Clearance] last transit failed. cand: " << allCands.size() << std::endl;
             return false;
+        }
 
         transit_paths.push_back(ph->getPathPtr(true));
+
+
+        // for debug
+        //ReloPush::StatePath debugP;
+        //debugP.push_back(transit_end);
+        //transit_paths.push_back(std::make_shared<ReloPush::StatePath>(debugP));
+
         return true;
     }
 
@@ -465,7 +745,11 @@ bool Planner::dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCan
 
         // Plan transit from current position to this candidate's entry pose
         auto ph = planHybridAstar(transit_start, entry_pose, planCtx, true);
-        if (ph->validity != PlanValidity::success) continue;
+        if (ph->validity != PlanValidity::success)
+        {
+            std::cout << "[Clearance] mid transit failed" << std::endl;
+            continue;
+        }
 
         transit_paths.push_back(ph->getPathPtr(true));
         selected_indices[obsIdx] = cand_idx;
@@ -479,6 +763,7 @@ bool Planner::dfsClearance(const std::vector<std::vector<ClearanceCand>>& allCan
 
 
         // DFS to the next obstacle
+        // using entry_pose as next. it is safe as it was visited already
         if (dfsClearance(allCands, planCtxNext, entry_pose,
                          obsIdx+1, transit_paths, selected_indices, idxes_collide, transit_end))
             return true;
@@ -505,14 +790,17 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
     auto param_org = env_.getParamSingleForAll();
 
     const double step_size = 0.05;
-    const int max_steps = 40;
+    const int max_steps = 50;
     float prepush_th = Constants::prepush_th;
 
     ob::State* scratch = si_single4clear_->allocState();
     auto* so_scratch = scratch->as<ObjectState>();
 
-    std::vector<std::vector<ClearanceCand>> allCands;
-    allCands.reserve(idxes_collide.size());
+    std::vector<std::vector<ClearanceCand>> allCands(0);
+
+
+    //for debug
+    auto endValid = planCtx.env_nonpush.stateValid(transit_end,planCtx.parameters.car_width,planCtx.parameters.obs_rad,planCtx.parameters.LF_nonpush);
 
     for (int c : idxes_collide)
     {
@@ -522,11 +810,20 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
         std::array<double,4> dirs = {yaw0, yaw0 + M_PI_2, yaw0 + M_PI, yaw0 + 3*M_PI_2};
         std::vector<ClearanceCand> cand;
 
+        bool is_blocking_app = false;
+        if(x0==endValid.collidingPose.x && y0 == endValid.collidingPose.y)
+            is_blocking_app = true;
+
         for (double dir : dirs)
         {
             auto obs_pose = ReloPush::State(x0, y0, dir);
             auto obs_prepush = ReloPush::find_pre_push(obs_pose, prepush_th);
-            if (!planCtx.env_nonpush.stateValid(obs_prepush)) continue;
+            auto obs_prepush_validity = planCtx.env_nonpush.stateValid(obs_prepush,planCtx.parameters.car_width,planCtx.parameters.obs_rad,planCtx.parameters.LF_nonpush);
+            if (!obs_prepush_validity)
+            {
+                //std::cout << "clear cand not valid" << std::endl;
+                continue;
+            }
 
             auto linear_path = std::make_shared<ReloPush::StatePath>();
             bool found_valid = false;
@@ -540,15 +837,27 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
                 so_scratch->setY(cy);
                 so_scratch->setYaw(dir);
 
-                if (!si_single4clear_->getStateSpace()->satisfiesBounds(scratch)) continue;
-                if (!si_single4clear_->isValid(scratch)) continue;
+                //if (!si_single4clear_->getStateSpace()->satisfiesBounds(scratch))
+                //    continue;
+                //if (!si_single4clear_->isValid(scratch))
+                //    continue;
 
                 bool bad = false;
                 for (auto &wp : *interp){
                     double dx = cx - wp.x, dy = cy - wp.y;
-                    if (dx*dx + dy*dy < margin*margin) { bad = true; break; }
+                    if(!is_blocking_app)
+                    {
+                        if (dx*dx + dy*dy < margin*margin) { bad = true; break; }
+                    }
+                    else
+                    {
+                        if (dx*dx + dy*dy < (margin*margin)*1.2) { bad = true; break; }
+                    }
+
                 }
-                if (bad) continue;
+                if (bad) continue;  // too close to the path
+
+
 
                 // Create linear straight-line path
                 for (int i = 1; i <= step; ++i) {
@@ -562,6 +871,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
             }
         }
 
+
         std::sort(cand.begin(), cand.end(), [](auto &a, auto &b){ return a.dist < b.dist; });
         allCands.push_back(std::move(cand));
     }
@@ -573,6 +883,7 @@ bool Planner::clearObstacles(const std::vector<int>& idxes_collide,
 
     if (success)
     {
+        std::cout << " clearing ok " << std::endl;
         ob::State* state_clear = si_all4all_->allocState();
         si_all4all_->copyState(state_clear, state_curr);
 
@@ -807,7 +1118,9 @@ bool Planner::planSequence(const std::vector<int> &order,
                            ob::State *state_curr,
                            og::PathGeometric &path_tmp,
                            std::vector<int> &done_objs,
-                           std::vector<ReloPush::StatePathPtr>& transit_paths)
+                           std::vector<int> &num_cleared,
+                           std::vector<ReloPush::StatePathPtr>& transit_paths,
+                           const bool use_rrt)
 {
     std::vector<ReloPush::State> arrival_poses(0);
 
@@ -830,15 +1143,16 @@ bool Planner::planSequence(const std::vector<int> &order,
     PlanningContext planCtx(params, objects_relopush, delivered_objs);
 
     const double turningRad = planCtx.parameters.turning_rad_pair.push; // for pushing
-    const double clearance_margin = planCtx.parameters.obs_rad*2;
+    const double clearance_margin = (planCtx.parameters.obs_rad+planCtx.parameters.car_width)*1.5;
     
     for (int o : order) {
+        int cleared_num = 0;
         env_.setParamSingleForAll(o, done_objs, state_curr);
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
-                           clearance_margin, done_objs,
+                           clearance_margin, done_objs, cleared_num,
                            planCtx, arrival_poses,
-                           transit_paths, robots))
+                           transit_paths, robots, use_rrt))
         {
             std::cout << "\n[";
             for(auto it : order)
@@ -855,6 +1169,8 @@ bool Planner::planSequence(const std::vector<int> &order,
         done_objs.push_back(o);
         std::cout << " << " << o;
         std::cout.flush();
+
+        num_cleared.push_back(cleared_num);
         
     }
     return true;
@@ -930,10 +1246,12 @@ bool Planner::processObject(int o,
                             double                              turningRad,
                             double                              clearance_margin,
                             std::vector<int>             &done_objs,
+                            int                                &cleared_num,
                             PlanningContext                    &planCtx,
                             std::vector<ReloPush::State>       &arrival_poses,
                             std::vector<ReloPush::StatePathPtr> &transit_paths,
-                            std::vector<ReloPush::State>& robots)
+                            std::vector<ReloPush::State>& robots,
+                            const bool use_rrt)
 {
     const ObjectState* s0 = STATE_OBJECT(state_curr, o);
     const ObjectState* s1 = STATE_OBJECT(goal,       o);
@@ -946,11 +1264,10 @@ bool Planner::processObject(int o,
     // 1) Determine starting point for transit
     ReloPush::State transit_start;
     if (!arrival_poses.empty()) {
-        transit_start = ReloPush::find_pre_push(
-            arrival_poses.back(),
-            prepush_th
-        );
-    } else {
+        transit_start = ReloPush::find_pre_push(arrival_poses.back(),0.01);
+    }
+    else
+    {
         transit_start = robots[0];
     }
 
@@ -964,15 +1281,33 @@ bool Planner::processObject(int o,
         reloDubinsPath bestDubins;
         ReloPush::StatePathPtr bestInterp(new ReloPush::StatePath);
 
-        bool gotOne = findBestDubins(
-            o, obj_start_relopush, obj_goal_relopush, turningRad,
-            bestDubins, bestInterp,
-            planCtx.parameters.map_resolution,
-            excluded,    // skip these index pairs
-            chosen_i,    // OUT: start‐index in yaws_start
-            chosen_j,     // OUT: goal‐index  in yaws_goal
-            planCtx
-        );
+        bool gotOne = false;
+
+        if(!use_rrt)
+        {
+            gotOne = findBestDubins(
+                o, obj_start_relopush, obj_goal_relopush, turningRad,
+                bestDubins, bestInterp,
+                planCtx.parameters.map_resolution,
+                excluded,    // skip these index pairs
+                chosen_i,    // OUT: start‐index in yaws_start
+                chosen_j,     // OUT: goal‐index  in yaws_goal
+                planCtx
+            );
+        }
+        else
+        {
+            gotOne = findBestDubinsRRTstar(
+                o, obj_start_relopush, obj_goal_relopush, turningRad,
+                bestDubins, bestInterp,
+                planCtx.parameters.map_resolution,
+                excluded,    // skip these index pairs
+                chosen_i,    // OUT: start‐index in yaws_start
+                chosen_j,     // OUT: goal‐index  in yaws_goal
+                planCtx,
+                state_curr,
+                        done_objs);
+        }
 
         if (!gotOne)
             return false;  // exhausted all candidates
@@ -1008,8 +1343,9 @@ bool Planner::processObject(int o,
           }
 
 
-        ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
-        //ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState, 0.1); // already pre-pushed
+        //ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
+        ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState, 0.12);
+
 
         // 6) If collisions → attempt clearance
         if (!idxes_collide.empty())
@@ -1041,6 +1377,8 @@ bool Planner::processObject(int o,
             }
             transit_paths.push_back(ph0->getPathPtr(true));
         }
+
+        cleared_num = idxes_collide.size();
 
         // 7) Success: append to final path & record arrival
         appendDubinsSegment(o, bestInterp, state_curr, path_tmp, prepush_th);

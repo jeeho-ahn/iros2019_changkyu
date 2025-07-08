@@ -1,4 +1,5 @@
 #include <run_expr_helper.hpp>
+#include <ompl/util/Console.h>
 
 ///////////////
 /*
@@ -58,6 +59,7 @@ int count_objects_in_mo_section(const std::string& line) {
 
 int main(int argc, char* argv[])
 {
+    ompl::msg::noOutputHandler();
     int id;
     string name_experiment;
     string name_planner;
@@ -80,8 +82,10 @@ int main(int argc, char* argv[])
     //char fp_res[256];
 
     std::string inst_file;
-    size_t inst_idx = 0;
+    size_t inst_idx = 7;
     bool use_single = false;
+    bool use_rrt = false; // dubins-based rrt
+
 
     if (argc == 1)
     {
@@ -90,17 +94,25 @@ int main(int argc, char* argv[])
         fp_init = dp_root + "/input/relopush/iros_obj6.txt";
         fp_goal = dp_root + "/input/relopush/output_6obj.goal";
     }
-    else if (argc == 3)
+    else if (argc >= 3)
     {
         // two args: single-file mode
         inst_file = argv[1];
         inst_idx = std::stoul(argv[2]);
         use_single = true;
 
+        if(argc==4)
+        {
+            auto use_rrt_arg = std::stoi(argv[3]);
+            if(use_rrt_arg==1)
+                use_rrt = true;
+        }
+
         fp_init = dp_root + "/input/relopush/" + inst_file;
 
-        std::cout << "=== " << inst_file << ": " << inst_idx << " ===" << std::endl;
+        std::cout << "=== " << inst_file << ": " << inst_idx << " ===" << " use RRT: " << use_rrt << std::endl;
     }
+
     else
     {
         std::cerr << "Usage:\n"
@@ -194,7 +206,7 @@ int main(int argc, char* argv[])
         skip,
         vis,
         vis_height, vis_width,
-        do_merge,
+        do_merge, use_rrt,
         box_width, box_height);
 
     return 0;

@@ -17,7 +17,7 @@ namespace ReloPush {
         }
         return yaw;
     }
-    static State find_pre_push(State& goalState, float distance)
+    static State find_pre_push(State goalState, float distance)
     {
         State outState(goalState);
 

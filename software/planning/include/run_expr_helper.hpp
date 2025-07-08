@@ -4,6 +4,7 @@
 
 
 #include <InstanceParser.hpp>
+#include <numeric>
 
 
 using namespace std;
@@ -153,7 +154,9 @@ static void runChosenPlanner(const std::string &plannerName,
                              ompl::base::State *sg,
                              og::PathGeometric &path,
                              std::vector<Planner::Action> &actions,
-                             bool do_merge)
+                             std::vector<int>& num_cleared,
+                             bool do_merge,
+                             bool use_rrt=false)
 {
     if (plannerName.rfind("ours", 0) == 0)
     {
@@ -161,7 +164,7 @@ static void runChosenPlanner(const std::string &plannerName,
     }
     else if (plannerName == "plrs")
     {
-        planner.plan_plrs_jeeho(si, sg, path, actions);
+        planner.plan_plrs_jeeho(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
     }
     else if (plannerName == "kino")
     {
@@ -264,7 +267,7 @@ static void runObjectLoop(
     bool skip,
     bool vis,
     int vis_height, int vis_width,
-    bool do_merge,
+    bool do_merge, bool use_rrt,
     double box_width, double box_height)
 {
     for (auto n_objs : ns)
@@ -309,14 +312,18 @@ static void runObjectLoop(
         // 6) plan
         og::PathGeometric path(env->getAllForAllSpaceInformation());
         std::vector<Planner::Action> actions;
+        std::vector<int> num_cleared;
         Planner planner(*env, std::move(objects));
+
+        //bool use_rrt = false;
+
         clock_t t0 = clock();
         runChosenPlanner(
             name_planner,
             planner,
             state_init, state_goal,
-            path, actions,
-            do_merge);
+            path, actions, num_cleared,
+            do_merge, use_rrt);
         double elapsed = double(clock() - t0) / CLOCKS_PER_SEC;
 
         // 7) save + report
@@ -351,6 +358,8 @@ static void runObjectLoop(
             }
         }
 
+        int total_num_cleared = std::accumulate(num_cleared.begin(),num_cleared.end(),0);
+
         std::cout << "\n\t---------- Results ----------" << std::endl;
         std::cout << "Total path length: " << total_path_length << std::endl;
         std::cout << "Path length for action type 1: " << action1_length << std::endl;
@@ -359,6 +368,8 @@ static void runObjectLoop(
 
         // Save summary statistics to a file
         std::string resultStatFile = dp_root + "/result/jeeho/results_obj" + std::to_string(n_objs) + ".txt";
+        if(use_rrt)
+            resultStatFile = dp_root + "/result/jeeho/results_obj" + std::to_string(n_objs) + "_rrt.txt";
         std::cout << "Saving to: " << resultStatFile << std::endl;
         std::ofstream fout_stat(resultStatFile.c_str(), std::ios::app);
         fout_stat << "===\n";
@@ -366,6 +377,8 @@ static void runObjectLoop(
         fout_stat << "planning_time(s):" << elapsed << "\n";
         fout_stat << "total_length(m):" << total_path_length << "\n";
         fout_stat << "transfer_length(m):" << action1_length << "\n";
+        //fout_stat << "number_of_cleared:" << total_num_cleared << "\n";
+
         fout_stat.close();
 
         std::cout << "file saved" << std::endl;

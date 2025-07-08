@@ -72,7 +72,9 @@ public:
     bool plan_plrs_jeeho(const ob::State* start,
                                   const ob::State* goal,
                                   og::PathGeometric &path_res,
-                                  std::vector<Action> &actions_res);
+                                  std::vector<Action> &actions_res,
+                                std::vector<int> &num_cleared,
+                                  const bool use_rrt = false);
 
 
 /*
@@ -226,6 +228,21 @@ private:
                         int &chosen_i,
                         int &chosen_j,
                         PlanningContext &planCtx) const;
+
+
+    bool findBestDubinsRRTstar(int o,
+                                const ReloPush::State object_start,
+                                const ReloPush::State object_goal,
+                                double turning_rad,
+                                reloDubinsPath & /*bestDubins*/,       // unused in RRT*
+                                ReloPush::StatePathPtr &bestInterp,
+                                double /*interpResolution*/,           // we’ll extract path from OMPL
+                                const std::vector<std::pair<int,int>> &excludedIndices,
+                                int &chosen_i,
+                                int &chosen_j,
+                                PlanningContext &planCtx,
+                               ob::State *state_curr,
+                               std::vector<int>& done_objs) const;
                         
     // Walk that Dubins path and record which objects first collide.
     void recordCollisions(int o,
@@ -303,7 +320,9 @@ private:
                       ob::State *state_curr,
                       og::PathGeometric &path_tmp,
                       std::vector<int> &done_objs,
-                      std::vector<ReloPush::StatePathPtr> &transit_paths);
+                      std::vector<int> &num_cleared,
+                      std::vector<ReloPush::StatePathPtr> &transit_paths,
+                      const bool use_rrt = false);
 
     bool processObject(int o,
                        const ob::State *goal,
@@ -312,10 +331,12 @@ private:
                        double turningRad,
                        double clearance_margin,
                        std::vector<int> &done_objs,
+                       int &cleared_num,
                        PlanningContext &planCtx,
                        std::vector<ReloPush::State>& arrival_poses,
                        std::vector<ReloPush::StatePathPtr>& transit_paths,
-                       std::vector<ReloPush::State>& robots);
+                       std::vector<ReloPush::State>& robots,
+                       const bool use_rrt = false);
 
     void appendInitialState(int o,
                              const ob::State* state_curr,
