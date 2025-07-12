@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #option(ENABLE_ASAN "Build with AddressSanitizer (+leak detector)" OFF)
 
 #if (ENABLE_ASAN)
-    # Make sure every object file AND the final link are built with ASan.
+#    # Make sure every object file AND the final link are built with ASan.
 #    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
 #    add_link_options    (-fsanitize=address)
 #endif()

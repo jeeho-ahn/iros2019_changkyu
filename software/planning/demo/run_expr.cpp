@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
     //char fp_res[256];
 
     std::string inst_file;
-    size_t inst_idx = 7;
+    size_t inst_idx = 61;
     bool use_single = false;
     bool use_rrt = false; // dubins-based rrt
 
@@ -91,8 +91,8 @@ int main(int argc, char* argv[])
     {
         // no args: keep the old two-file behavior
         //fp_init = dp_root + "/input/relopush/input_6obj.init";
-        fp_init = dp_root + "/input/relopush/iros_obj6.txt";
-        fp_goal = dp_root + "/input/relopush/output_6obj.goal";
+        fp_init = dp_root + "/input/relopush/iros_obj8.txt";
+        fp_goal = dp_root + "/input/relopush/output_8obj.goal";
     }
     else if (argc >= 3)
     {
