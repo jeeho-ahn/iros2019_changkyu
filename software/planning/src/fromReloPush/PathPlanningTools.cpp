@@ -11,7 +11,11 @@ float Constants::normalizeHeadingRad(float t) {
 }
 
 Environment::PlanningContext::PlanningContext()
-{}
+{
+    dx.resize(6);
+    dy.resize(6);
+    dyaw.resize(6);
+}
 
 Environment::PlanningContext::PlanningContext(bool use_reverse, float turning_r, float LF_in, float speed_lim) : allow_reverse(use_reverse), turning_radius(turning_r), speed_limit(speed_lim)
 {

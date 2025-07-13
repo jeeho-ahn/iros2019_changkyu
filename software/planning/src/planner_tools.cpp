@@ -1130,7 +1130,7 @@ bool Planner::planSequence(const std::vector<int> &order,
     std::unordered_map<std::string, ObjectInfo> objects_relopush;
     std::unordered_map<std::string, GoalInfo> goals_relopush, delivered_objs;
 
-    std::vector<ReloPush::State> robots = {ReloPush::State(0.1, 0.1, 0.2)}; // todo: parse from file
+    std::vector<ReloPush::State> robots = {ReloPush::State(0.5, 0.4, 0.0)}; // todo: parse from file
     PlanningParameters params(Constants::r_push, Constants::r_nonpush,
                                 Constants::mapResolution,
                             Constants::carWidth,
@@ -1148,12 +1148,16 @@ bool Planner::planSequence(const std::vector<int> &order,
     for (int o : order) {
         int cleared_num = 0;
         env_.setParamSingleForAll(o, done_objs, state_curr);
+
+
+
+
         if (!processObject(o, goal, state_curr,
                            path_tmp, turningRad,
                            clearance_margin, done_objs, cleared_num,
                            planCtx, arrival_poses,
                            transit_paths, robots, use_rrt))
-        {
+        { 
             std::cout << "\n[";
             for(auto it : order)
             {
@@ -1162,8 +1166,12 @@ bool Planner::planSequence(const std::vector<int> &order,
 
             std::cout << "] failed at " << o << ". Trying next permutation" << std::endl;
             done_objs.clear();
+            
             return false; // current sequence has no solution. try different permutation
         }
+
+
+
 
         // Add object in done list
         done_objs.push_back(o);
@@ -1312,16 +1320,35 @@ bool Planner::processObject(int o,
         if (!gotOne)
             return false;  // exhausted all candidates
 
+
+
         // 4) Create a “selfish” path for collision checking
         og::PathGeometric selfish(si_single4all_);
         appendInitialState(o, state_curr, selfish);
         appendWaypoints   (o, bestInterp,   state_curr, selfish);
+
+        //////////////////////////////////////
+        // Memory blow up
+
 
         // 5) Record collisions
         std::vector<int> idxes_collide;
         std::unordered_map<int, ReloPush::State> collision_pose;
         recordCollisions(o, bestInterp, state_curr,
                          idxes_collide, collision_pose);
+
+
+
+
+
+        /////////////
+        //env_.freeParamSingleForAll();
+        //return false;
+
+
+
+
+
 
         // fail if any finished object collides with this
         bool has_common = std::any_of(idxes_collide.begin(), idxes_collide.end(), [&](int val) {
@@ -1343,27 +1370,33 @@ bool Planner::processObject(int o,
           }
 
 
-        //ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
-        ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState, 0.12);
 
 
-        // 6) If collisions → attempt clearance
-        if (!idxes_collide.empty())
-        {
-            bool cleared = clearObstacles(
-                idxes_collide, o, bestInterp,
-                state_curr, path_tmp,
-                 planCtx, transit_paths, transit_start, obj_app, clearance_margin
-            );
-            if (!cleared) {
-                std::cout << "\tClearing failed. Trying other start/goal poses" << std::endl;
-                // rollback the transit path we just pushed
-                //transit_paths.pop_back();
-                // mark this (i,j) as excluded
-                excluded.emplace_back(std::make_pair(chosen_i, chosen_j));
-                // and try the next Dubins
-                continue;
-            }
+
+
+
+
+
+          // ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);
+          ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState, 0.12);
+
+          // 6) If collisions → attempt clearance
+          if (!idxes_collide.empty())
+          {
+              bool cleared = clearObstacles(
+                  idxes_collide, o, bestInterp,
+                  state_curr, path_tmp,
+                  planCtx, transit_paths, transit_start, obj_app, clearance_margin);
+              if (!cleared)
+              {
+                  std::cout << "\tClearing failed. Trying other start/goal poses" << std::endl;
+                  // rollback the transit path we just pushed
+                  // transit_paths.pop_back();
+                  // mark this (i,j) as excluded
+                  excluded.emplace_back(std::make_pair(chosen_i, chosen_j));
+                  // and try the next Dubins
+                  continue;
+              }
         }
         else
         {

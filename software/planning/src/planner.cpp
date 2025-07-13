@@ -2080,13 +2080,16 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
 
     // try all permutations until success
     do {
+        num_cleared.clear();
         si_all4all_->copyState(state_curr, start);
+
+
         og::PathGeometric path_tmp(si_all4all_);
 
         std::vector<ReloPush::StatePathPtr> transit_paths;
         transit_paths.clear();
 
-        //std::cout << "preplan" << std::endl;
+        //std::cout << "preplan" << std::endl; 
         if (planSequence(order_objs, start, goal,
                          state_curr, path_tmp,
                          done_objs, num_cleared,
@@ -2096,6 +2099,9 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
             best_transit_paths = transit_paths;
             break;
         }
+
+       //std::cout << "sardz " << this->env_.get_states_around_zero_size() << std::endl;
+
         //std::cout << "postplan" << std::endl;
     } while (std::next_permutation(order_objs.begin(), order_objs.end()));
 

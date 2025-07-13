@@ -262,6 +262,11 @@ public:
         ss->freeState(state_zero);
     }
 
+    size_t get_states_around_zero_size()
+    {
+        return states_around_zero_.size();
+    }
+
     virtual bool isValid(double x, double y, double yaw) = 0;
     virtual void visualizeSetup(cv::Mat &img) = 0;
     virtual void getGoalState(int o, double* x, double* y, double* yaw) = 0;
@@ -322,19 +327,30 @@ public:
         ParamSingleForAll param;        
         param.idx_target = idx_target;
         param.idxes_obs  = idxes_obs;
-        //param.state_all  = state_all->as<RobotObjectStateSpace::StateType>(); //jeeho
+
+        param.state_all  = state_all->as<RobotObjectStateSpace::StateType>();
         // Allocate our own copy so that mutations to
         // the planner’s working state don’t bleed into the “static obstacles.”
-        auto copy = si_all4all_->allocState()->as<RobotObjectStateSpace::StateType>();
-        si_all4all_->copyState(copy, state_all);
-        param.state_all = copy;
+
+        //// Jeeho: this causes memory blow up
+        //auto copy = si_all4all_->allocState()->as<RobotObjectStateSpace::StateType>();
+        //si_all4all_->copyState(copy, state_all);
+        //param.state_all = copy;
+        
         setParamSingleForAll(param);
     }
+
+    void freeParamSingleForAll()
+    {
+        si_all4all_->freeState(param_single4all_.state_all);
+    }
+
 
     void setParamSingleForClear( const ParamSingleForClear &param )
     {
         param_single4clear_ = param;
     }
+
 
     void setParamSingleForClear( int idx_target,
                                  int idx_obs,

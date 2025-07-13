@@ -238,36 +238,44 @@ struct StatePathValidity{
 class Environment {
 public:
 
-    Environment(){};
+    Environment()
+    {
+        m_dimx = 500;
+        m_dimy = 500; // dummy, limited value
+        holonomic_cost_map = std::vector<std::vector<double>>(
+            m_dimx, std::vector<double>(m_dimy, 0));
+
+        //std::cout << "??" << holonomic_cost_map.size() << " " << holonomic_cost_map[0].size() << std::endl;
+    };
 
     /*
-  Environment(size_t maxx, size_t maxy, std::unordered_set<State> obstacles,
-              State goal = State(0,0,0))
-      : m_obstacles(std::move(obstacles)),
-        m_goal(goal)  // NOLINT
-  {
-    m_dimx = static_cast<int>(maxx / Constants::mapResolution);
-    m_dimy = static_cast<int>(maxy / Constants::mapResolution);
-    // std::cout << "env build " << m_dimx << " " << m_dimy << " "
-    //           << m_obstacles.size() << std::endl;
-    holonomic_cost_map = std::vector<std::vector<double>>(
-        m_dimx, std::vector<double>(m_dimy, 0));
-    m_goal = State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
-    updateCostmap();
+    Environment(size_t maxx, size_t maxy, std::unordered_set<State> obstacles,
+                State goal = State(0,0,0))
+        : m_obstacles(std::move(obstacles)),
+            m_goal(goal)  // NOLINT
+    {
+        m_dimx = static_cast<int>(maxx / Constants::mapResolution);
+        m_dimy = static_cast<int>(maxy / Constants::mapResolution);
+        // std::cout << "env build " << m_dimx << " " << m_dimy << " "
+        //           << m_obstacles.size() << std::endl;
+        holonomic_cost_map = std::vector<std::vector<double>>(
+            m_dimx, std::vector<double>(m_dimy, 0));
+        m_goal = State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
+        updateCostmap();
 
-    //test dynamic_obs
+        //test dynamic_obs
 
-    dynamic_obs.insert(std::pair<int,State>(1,State(2.46318, 2.44999, 0,1)));
-    dynamic_obs.insert(std::pair<int,State>(2,State(2.06318, 2.44999, 0,2)));
-    dynamic_obs.insert(std::pair<int,State>(3,State(1.76318, 2.44999, 0,3)));
-    dynamic_obs.insert(std::pair<int,State>(4,State(1.46318, 2.44999, 0,4)));
-    dynamic_obs.insert(std::pair<int,State>(5,State(1.16318, 2.44999, 0,5)));
-    dynamic_obs.insert(std::pair<int,State>(6,State(0.86318, 2.44999, 0,6)));
-    dynamic_obs.insert(std::pair<int,State>(7,State(0.56318, 2.44999, 0,7)));
-    std::cout << "test dobs addeed" << std::endl;
+        dynamic_obs.insert(std::pair<int,State>(1,State(2.46318, 2.44999, 0,1)));
+        dynamic_obs.insert(std::pair<int,State>(2,State(2.06318, 2.44999, 0,2)));
+        dynamic_obs.insert(std::pair<int,State>(3,State(1.76318, 2.44999, 0,3)));
+        dynamic_obs.insert(std::pair<int,State>(4,State(1.46318, 2.44999, 0,4)));
+        dynamic_obs.insert(std::pair<int,State>(5,State(1.16318, 2.44999, 0,5)));
+        dynamic_obs.insert(std::pair<int,State>(6,State(0.86318, 2.44999, 0,6)));
+        dynamic_obs.insert(std::pair<int,State>(7,State(0.56318, 2.44999, 0,7)));
+        std::cout << "test dobs addeed" << std::endl;
 
-  }
-  */
+    }
+    */
 
     Environment(float maxx, float maxy, std::unordered_set<ReloPush::State> obstacles, float turning_rad_in, float LF_in, bool use_reverse,
                 ReloPush::State goal = ReloPush::State(0,0,0), float speed = 0.385f)
@@ -279,13 +287,21 @@ public:
 
         m_dimx = static_cast<int>(maxx / static_cast<float>(Constants::mapResolution));
         m_dimy = static_cast<int>(maxy / static_cast<float>(Constants::mapResolution));
-        // std::cout << "env build " << m_dimx << " " << m_dimy << " "
-        //           << m_obstacles.size() << std::endl;
+         //std::cout << "env build " << m_dimx << " " << m_dimy << " "
+         //          << m_obstacles.size() << std::endl;
         holonomic_cost_map = std::vector<std::vector<double>>(
             m_dimx, std::vector<double>(m_dimy, 0));
+
+        //std::cout << "??????" << holonomic_cost_map.size() << " " << holonomic_cost_map[0].size() << std::endl;
+
         m_goal = ReloPush::State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
         updateCostmap();
     }
+
+    size_t numStaticObstacles() const { return m_obstacles.size(); }
+    size_t numDynamicObstacles() const { return dynamic_obs.size(); }
+    size_t costmapRows() const { return holonomic_cost_map.size(); }
+    size_t costmapCols(int row = 0) const { return holonomic_cost_map[row].size(); }
 
     void changeGoal(ReloPush::State goal_in)
     {
@@ -393,6 +409,13 @@ public:
                                  pow((s.y - static_cast<int>(s.y)) -
                                          (m_goal.y - static_cast<int>(m_goal.y)),
                                      2));
+
+        // ---- BEGIN bounds check ----
+        int ix = static_cast<int>(s.x / Constants::mapResolution);
+        int iy = static_cast<int>(s.y / Constants::mapResolution);
+
+        assert(ix >= 0 && ix < m_dimx && iy >= 0 && iy < m_dimy);
+
         double twoDCost =
             holonomic_cost_map[static_cast<int>(s.x / Constants::mapResolution)]
                               [static_cast<int>(s.y / Constants::mapResolution)] -
@@ -993,6 +1016,18 @@ private:
                         holonomic_cost_map[new_x][new_y] == 0 &&
                         temp_obs_set.find(std::make_pair(new_x, new_y)) ==
                             temp_obs_set.end()) {
+
+                        // ---- bounds check for parent cell ----
+                        assert(x >= 0 && x < m_dimx);
+                        assert(y >= 0 && y < m_dimy);
+                        if(m_dimx >100 || m_dimy >100)
+                            std::cout << "wtf " << m_dimx << " " << m_dimy <<std::endl;
+
+                        //std::cout << m_dimx << " tt " << m_dimy << std::endl;
+
+                        assert(new_x >= 0 && new_x < m_dimx);
+                        assert(new_y >= 0 && new_y < m_dimy);
+
                         holonomic_cost_map[new_x][new_y] =
                             holonomic_cost_map[x][y] +
                             sqrt(pow(dx * Constants::mapResolution, 2) +
