@@ -69,7 +69,14 @@ public:
                     ompl::geometric::PathGeometric &path_res,
                     std::vector<Action> &actions_res );
 
-    bool plan_plrs_jeeho(const ob::State* start,
+    bool plan_plrs_jeeho_brute(const ob::State* start,
+                                  const ob::State* goal,
+                                  og::PathGeometric &path_res,
+                                  std::vector<Action> &actions_res,
+                                std::vector<int> &num_cleared,
+                                  const bool use_rrt = false);
+
+    bool plan_plrs_jeeho_random(const ob::State* start,
                                   const ob::State* goal,
                                   og::PathGeometric &path_res,
                                   std::vector<Action> &actions_res,

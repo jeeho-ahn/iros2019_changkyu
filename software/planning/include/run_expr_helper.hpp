@@ -164,7 +164,8 @@ static void runChosenPlanner(const std::string &plannerName,
     }
     else if (plannerName == "plrs")
     {
-        planner.plan_plrs_jeeho(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
+        //planner.plan_plrs_jeeho_brute(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
+        planner.plan_plrs_jeeho_random(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
     }
     else if (plannerName == "kino")
     {

@@ -2059,7 +2059,7 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
     si_single4all_->freeState(state_curr);
 }
 
-bool Planner::plan_plrs_jeeho(const ob::State *start,
+bool Planner::plan_plrs_jeeho_brute(const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
                               std::vector<Action> &actions_res,
@@ -2124,6 +2124,86 @@ bool Planner::plan_plrs_jeeho(const ob::State *start,
         std::cout << "done" << std::endl;
     }
     
+    //path2Actions(path_res, actions_res);
+    path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
+
+    return !path_res.getStateCount() == 0;
+}
+
+bool Planner::plan_plrs_jeeho_random(const ob::State *start,
+                              const ob::State *goal,
+                              og::PathGeometric &path_res,
+                              std::vector<Action> &actions_res,
+                              std::vector<int> &num_cleared,
+                              const bool use_rrt)
+{
+    LOG << "plan started (plrs_jeeho_random)";
+
+    // generate object orders
+    std::vector<int> order_objs(n_objs_);
+    std::iota(order_objs.begin(), order_objs.end(), 1);
+
+    ob::State* state_curr = si_all4all_->allocState();
+    og::PathGeometric best_path(si_all4all_);
+    std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
+    std::vector<int> done_objs(0);
+    num_cleared.clear();
+
+    std::vector<std::vector<int>> all_perms;
+
+    // Generate all permutations
+    std::vector<int> obj_perm = order_objs;
+    std::sort(obj_perm.begin(), obj_perm.end()); // Ensure starting from the smallest lex order
+
+    do {
+        all_perms.push_back(obj_perm);
+    } while (std::next_permutation(obj_perm.begin(), obj_perm.end()));
+
+    // Shuffle all permutations randomly
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(all_perms.begin(), all_perms.end(), g);
+
+    bool found = false; // Track if planning succeeded
+
+    for (const auto& perm : all_perms) {
+        num_cleared.clear();
+        si_all4all_->copyState(state_curr, start);
+
+        og::PathGeometric path_tmp(si_all4all_);
+
+        std::vector<ReloPush::StatePathPtr> transit_paths;
+        transit_paths.clear();
+
+        if (planSequence(perm, start, goal,
+                         state_curr, path_tmp,
+                         done_objs, num_cleared,
+                         transit_paths, use_rrt))
+        {
+            best_path = path_tmp;
+            best_transit_paths = transit_paths;
+            found = true;
+            break;
+        }
+    }
+
+    // Optionally: handle the case when no plan was found
+    if (!found) {
+        std::cout << "No valid sequence found after trying all permutations." << std::endl;
+    }
+    else
+    {
+        std::cout << "\nFinished Planning: ";
+        for(auto it : order_objs)
+            std::cout << it << "->";
+
+        std::cout << "\n";
+        for(auto it : done_objs)
+            std::cout << it << ",";
+
+        std::cout << "done" << std::endl;
+    }
+
     //path2Actions(path_res, actions_res);
     path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
 
