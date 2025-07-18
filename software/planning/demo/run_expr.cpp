@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
     size_t inst_idx = 61;
     bool use_single = false;
     bool use_rrt = false; // dubins-based rrt
-
+    Planner::plRS_MODE mode = Planner::plRS_MODE::BRUTE_FORCE;
 
     if (argc == 1)
     {
@@ -101,16 +101,32 @@ int main(int argc, char* argv[])
         inst_idx = std::stoul(argv[2]);
         use_single = true;
 
-        if(argc==4)
+        if(argc>=4)
         {
             auto use_rrt_arg = std::stoi(argv[3]);
             if(use_rrt_arg==1)
                 use_rrt = true;
         }
 
+        if(argc==5)
+        {
+            std::string mode_str = argv[4];
+            if(mode_str == "b")
+                mode = Planner::plRS_MODE::BRUTE_FORCE;
+            else if(mode_str == "r")
+                mode = Planner::plRS_MODE::RANDOM;
+            else if(mode_str == "g")
+                mode = Planner::plRS_MODE::GREEDY;
+            else {
+                std::cout << "Wrong input for mode" << std::endl;
+                return -1;
+            }
+
+        }
+
         fp_init = dp_root + "/input/relopush/" + inst_file;
 
-        std::cout << "=== " << inst_file << ": " << inst_idx << " ===" << " use RRT: " << use_rrt << std::endl;
+        std::cout << "=== " << inst_file << ": " << inst_idx << " ===" << " use RRT: " << use_rrt << " mode: " << mode << std::endl;
     }
 
     else
@@ -197,6 +213,7 @@ int main(int argc, char* argv[])
             */
 
     runObjectLoop(
+        mode,
         inst_idx, id,
         ns,
         dp_root,

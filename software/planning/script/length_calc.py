@@ -42,6 +42,17 @@ def process_file(filename):
         x1_adj, y1_adj = shift_pose(x_curr, y_curr, yaw_curr, type_curr == 1)
 
         d = math.hypot(x1_adj - x0_adj, y1_adj - y0_adj)
+
+
+        # Debug output:
+        #print(f"Segment {i-1}->{i}:")
+        #print(f"  type_prev: {type_prev}, type_curr: {type_curr}")
+        #print(f"  (x_prev, y_prev, yaw_prev): ({x_prev:.6f}, {y_prev:.6f}, {yaw_prev:.6f})")
+        #print(f"  (x_curr, y_curr, yaw_curr): ({x_curr:.6f}, {y_curr:.6f}, {yaw_curr:.6f})")
+        #print(f"  (x0_adj, y0_adj): ({x0_adj:.6f}, {y0_adj:.6f}), (x1_adj, y1_adj): ({x1_adj:.6f}, {y1_adj:.6f})")
+        #print(f"  d: {d:.6f}")
+
+
         total_length += d
 
         if type_prev == 1 and type_curr == 1:

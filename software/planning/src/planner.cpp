@@ -2059,14 +2059,15 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
     si_single4all_->freeState(state_curr);
 }
 
-bool Planner::plan_plrs_jeeho_brute(const ob::State *start,
+bool Planner::plan_plrs_jeeho(const plRS_MODE mode,
+                              const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
                               std::vector<Action> &actions_res,
                               std::vector<int> &num_cleared,
                               const bool use_rrt)
 {
-    LOG << "plan started (plrs_jeeho)";
+    std::cout << "\n===== plan started (plrs_jeeho): " << getModeStr(mode)<< " =====" << std::endl;
 
     // generate object orders
     std::vector<int> order_objs(n_objs_);
@@ -2078,32 +2079,84 @@ bool Planner::plan_plrs_jeeho_brute(const ob::State *start,
     std::vector<int> done_objs(0);
     num_cleared.clear();
 
-    // try all permutations until success
-    do {
-        num_cleared.clear();
-        si_all4all_->copyState(state_curr, start);
+
+    if(mode==plRS_MODE::BRUTE_FORCE)
+    {
+
+        // try all permutations until success
+        do {
+            num_cleared.clear();
+            si_all4all_->copyState(state_curr, start);
 
 
-        og::PathGeometric path_tmp(si_all4all_);
+            og::PathGeometric path_tmp(si_all4all_);
 
-        std::vector<ReloPush::StatePathPtr> transit_paths;
-        transit_paths.clear();
+            std::vector<ReloPush::StatePathPtr> transit_paths;
+            transit_paths.clear();
 
-        //std::cout << "preplan" << std::endl; 
-        if (planSequence(order_objs, start, goal,
-                         state_curr, path_tmp,
-                         done_objs, num_cleared,
-                        transit_paths, use_rrt))
-        {
-            best_path = path_tmp;
-            best_transit_paths = transit_paths;
-            break;
+            //std::cout << "preplan" << std::endl;
+            if (planSequence(order_objs, start, goal,
+                             state_curr, path_tmp,
+                             done_objs, num_cleared,
+                            transit_paths, use_rrt))
+            {
+                best_path = path_tmp;
+                best_transit_paths = transit_paths;
+                break;
+            }
+
+           //std::cout << "sardz " << this->env_.get_states_around_zero_size() << std::endl;
+
+            //std::cout << "postplan" << std::endl;
+        } while (std::next_permutation(order_objs.begin(), order_objs.end()));
+
+    }
+
+    else if(mode==plRS_MODE::RANDOM)
+    {
+        std::vector<std::vector<int>> all_perms;
+
+        // Generate all permutations
+        std::vector<int> obj_perm = order_objs;
+        std::sort(obj_perm.begin(), obj_perm.end()); // Ensure starting from the smallest lex order
+
+        do {
+            all_perms.push_back(obj_perm);
+        } while (std::next_permutation(obj_perm.begin(), obj_perm.end()));
+
+        // Shuffle all permutations randomly
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(all_perms.begin(), all_perms.end(), g);
+
+       // bool found = false; // Track if planning succeeded
+
+        for (const auto& perm : all_perms) {
+            num_cleared.clear();
+            si_all4all_->copyState(state_curr, start);
+
+            og::PathGeometric path_tmp(si_all4all_);
+
+            std::vector<ReloPush::StatePathPtr> transit_paths;
+            transit_paths.clear();
+
+            if (planSequence(perm, start, goal,
+                             state_curr, path_tmp,
+                             done_objs, num_cleared,
+                             transit_paths, use_rrt))
+            {
+                best_path = path_tmp;
+                best_transit_paths = transit_paths;
+                //found = true;
+                break;
+            }
         }
+    }
 
-       //std::cout << "sardz " << this->env_.get_states_around_zero_size() << std::endl;
 
-        //std::cout << "postplan" << std::endl;
-    } while (std::next_permutation(order_objs.begin(), order_objs.end()));
+
+
+
 
     si_all4all_->freeState(state_curr);
 
@@ -2130,6 +2183,9 @@ bool Planner::plan_plrs_jeeho_brute(const ob::State *start,
     return !path_res.getStateCount() == 0;
 }
 
+
+
+/*
 bool Planner::plan_plrs_jeeho_random(const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
@@ -2164,7 +2220,7 @@ bool Planner::plan_plrs_jeeho_random(const ob::State *start,
     std::mt19937 g(rd());
     std::shuffle(all_perms.begin(), all_perms.end(), g);
 
-    bool found = false; // Track if planning succeeded
+   // bool found = false; // Track if planning succeeded
 
     for (const auto& perm : all_perms) {
         num_cleared.clear();
@@ -2182,13 +2238,16 @@ bool Planner::plan_plrs_jeeho_random(const ob::State *start,
         {
             best_path = path_tmp;
             best_transit_paths = transit_paths;
-            found = true;
+            //found = true;
             break;
         }
     }
 
+    si_all4all_->freeState(state_curr);
+    path_res = best_path;
+
     // Optionally: handle the case when no plan was found
-    if (!found) {
+    if (path_res.getStateCount()==0) {
         std::cout << "No valid sequence found after trying all permutations." << std::endl;
     }
     else
@@ -2209,7 +2268,7 @@ bool Planner::plan_plrs_jeeho_random(const ob::State *start,
 
     return !path_res.getStateCount() == 0;
 }
-
+*/
 
 
 /*
@@ -3566,70 +3625,125 @@ void Planner::test()
     si_single_->freeState(goal);
 }
 
-void Planner::save_plan( const std::string &fp_save,
-                         const std::string &name,
-                         int n_objs,
-                         double time_spent,
-                         double time_moving,
-                         const ompl::base::State* state_init,
-                         const ompl::base::State* state_goal,
-                         const ompl::geometric::PathGeometric &path,
-                         const std::vector<Action> &actions          )
-{
-    //for debug (jeeho)
-    std::cout << fp_save << std::endl;
-    double cost = compute_cost(path);
-    //double dist = distance(state_goal,path.getState(path.getStateCount()-1));
-    ofstream ofs(fp_save);
-    ofs << "name: " << name << endl;
-    ofs << "time_spent: " << time_spent << endl;
-    ofs << "time_moving: " << time_moving << endl;
-    ofs << "cost: " << cost << endl;
-    //ofs << "dist: " << dist << endl;
-    ofs << "actions: [" << endl;
-    for( int a=0; a<actions.size(); a++ )
+    void Planner::save_plan( const std::string &fp_save,
+                             const std::string &name,
+                             int n_objs,
+                             double time_spent,
+                             double time_moving,
+                             const ompl::base::State* state_init,
+                             const ompl::base::State* state_goal,
+                             const ompl::geometric::PathGeometric &path,
+                             const std::vector<Action> &actions          )
     {
-        ofs << "[" << actions[a].type << ","
-                   << actions[a].idx_target  << ","
-                   << actions[a].idx_target2 << ","
-                   << actions[a].x    << ","
-                   << actions[a].y    << ","
-                   << actions[a].yaw  << "]," << endl;
-    }
-    ofs << "]" << endl;
-    ofs << "path: [" << endl;
-    for( int i=0; i<path.getStateCount(); i++ )
-    {
-        const ompl::base::CompoundStateSpace::StateType* cs
-         = path.getState(i)->as<ompl::base::CompoundStateSpace::StateType>();
+        //for debug (jeeho)
+        std::cout << fp_save << std::endl;
+        double cost = compute_cost(path);
+        //double dist = distance(state_goal,path.getState(path.getStateCount()-1));
+        ofstream ofs(fp_save);
+        ofs << "name: " << name << endl;
+        ofs << "time_spent: " << time_spent << endl;
+        ofs << "time_moving: " << time_moving << endl;
+        ofs << "cost: " << cost << endl;
+        //ofs << "dist: " << dist << endl;
+        ofs << "actions: [" << endl;
+        for( int a=0; a<actions.size(); a++ )
+        {
+            ofs << "[" << actions[a].type << ","
+                       << actions[a].idx_target  << ","
+                       << actions[a].idx_target2 << ","
+                       << actions[a].x    << ","
+                       << actions[a].y    << ","
+                       << actions[a].yaw  << "]," << endl;
+        }
+        ofs << "]" << endl;
+        ofs << "path: [" << endl;
+        for( int i=0; i<path.getStateCount(); i++ )
+        {
+            const ompl::base::CompoundStateSpace::StateType* cs
+             = path.getState(i)->as<ompl::base::CompoundStateSpace::StateType>();
 
-        ofs << "[";
-        ofs << cs->as<ob::RealVectorStateSpace::StateType>(0)->values[0] << ",";
+            ofs << "[";
+            ofs << cs->as<ob::RealVectorStateSpace::StateType>(0)->values[0] << ",";
+            for( int o=1; o<=n_objs; o++ )
+            {
+                ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getX() << ",";
+                ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getY() << ",";
+                ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getYaw() << ",";
+            }
+            ofs << "]," << endl;
+        }
+        ofs << "]" << endl;
+        ofs << "init: [";
         for( int o=1; o<=n_objs; o++ )
         {
-            ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getX() << ",";
-            ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getY() << ",";
-            ofs << cs->as<ob::SE2StateSpace::StateType>(o)->getYaw() << ",";
+            ofs << STATE_OBJECT(state_init,o)->getX()   << ",";
+            ofs << STATE_OBJECT(state_init,o)->getY()   << ",";
+            ofs << STATE_OBJECT(state_init,o)->getYaw() << ",";
         }
-        ofs << "]," << endl;
-    }
-    ofs << "]" << endl;
-    ofs << "init: [";
-    for( int o=1; o<=n_objs; o++ )
-    {
-        ofs << STATE_OBJECT(state_init,o)->getX()   << ",";
-        ofs << STATE_OBJECT(state_init,o)->getY()   << ",";
-        ofs << STATE_OBJECT(state_init,o)->getYaw() << ",";
-    }
-    ofs << "]" << endl;
+        ofs << "]" << endl;
 
-    ofs << "goal: [";
-    for( int o=1; o<=n_objs; o++ )
-    {
-        ofs << STATE_OBJECT(state_goal,o)->getX()   << ",";
-        ofs << STATE_OBJECT(state_goal,o)->getY()   << ",";
-        ofs << STATE_OBJECT(state_goal,o)->getYaw() << ",";
+        ofs << "goal: [";
+        for( int o=1; o<=n_objs; o++ )
+        {
+            ofs << STATE_OBJECT(state_goal,o)->getX()   << ",";
+            ofs << STATE_OBJECT(state_goal,o)->getY()   << ",";
+            ofs << STATE_OBJECT(state_goal,o)->getYaw() << ",";
+        }
+        ofs << "]" << endl;
+        ofs.close();
     }
-    ofs << "]" << endl;
-    ofs.close();
+
+
+
+    void Planner::calc_lengths(
+    const std::vector<Planner::Action>& actions,
+    double& total_length,
+    double& transfer_length,
+    double& transit_length,
+    double shift_dist)
+    {
+        total_length = 0.0;
+        transfer_length = 0.0;
+        transit_length = 0.0;
+
+        if (actions.size() < 2) return;
+
+        for (size_t i = 1; i < actions.size(); ++i)
+        {
+            const Action& prev = actions[i - 1];
+            const Action& curr = actions[i];
+
+            // Shift previous point if transfer
+            double x0_adj = prev.x;
+            double y0_adj = prev.y;
+            if (prev.type == TYPE_ACTION::ACTION_TRANSFER) {
+                x0_adj = prev.x - shift_dist * std::cos(prev.yaw);
+                y0_adj = prev.y - shift_dist * std::sin(prev.yaw);
+            }
+            // Shift current point if transfer
+            double x1_adj = curr.x;
+            double y1_adj = curr.y;
+            if (curr.type == TYPE_ACTION::ACTION_TRANSFER) {
+                x1_adj = curr.x - shift_dist * std::cos(curr.yaw);
+                y1_adj = curr.y - shift_dist * std::sin(curr.yaw);
+            }
+
+            double d = std::hypot(x1_adj - x0_adj, y1_adj - y0_adj);
+
+
+            // Debug output:
+            std::cout << "Segment " << (i-1) << "->" << i << ":\n";
+            std::cout << "  type_prev: " << prev.type << ", type_curr: " << curr.type << "\n";
+            std::cout << "  (x_prev, y_prev, yaw_prev): (" << prev.x << ", " << prev.y << ", " << prev.yaw << ")\n";
+            std::cout << "  (x_curr, y_curr, yaw_curr): (" << curr.x << ", " << curr.y << ", " << curr.yaw << ")\n";
+            std::cout << "  (x0_adj, y0_adj): (" << x0_adj << ", " << y0_adj << "), (x1_adj, y1_adj): (" << x1_adj << ", " << y1_adj << ")\n";
+            std::cout << "  d: " << d << "\n";
+
+            total_length += d;
+
+            if (prev.type == TYPE_ACTION::ACTION_TRANSFER && curr.type == TYPE_ACTION::ACTION_TRANSFER)
+                transfer_length += d;
+            else
+                transit_length += d;
+    }
 }

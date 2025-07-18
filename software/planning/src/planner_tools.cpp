@@ -502,6 +502,7 @@ void Planner::recordCollisions(int o,
                                std::vector<int> &idxes_collide,
                                std::unordered_map<int,ReloPush::State> &collision_pose)
 {
+    double distance_threshold = (Constants::carWidth/2 + Constants::obsRadius)*1.05;
     // save original params
     auto param_org = env_.getParamSingleForAll();
 
@@ -524,13 +525,36 @@ void Planner::recordCollisions(int o,
             std::vector<int> tmp{c};
             env_.setParamSingleForAll(o, tmp, state_curr);
 
-            // if this probe collides—and we haven’t recorded c yet—
-            if (!si_single4all_->isValid(state_midd)
-                && collision_pose.count(c) == 0)
-            {
+
+
+
+
+            // --- DISTANCE-BASED COLLISION CHECK ---
+            ob::State *obj_state = STATE_OBJECT(state_curr, c); // <-- implement/get this from env
+            double dx = wp.x - obj_state->as<ObjectState>()->getX();
+            double dy = wp.y - obj_state->as<ObjectState>()->getY();
+            double dist = std::sqrt(dx*dx + dy*dy);
+
+            if ((dist < distance_threshold  || !si_single4all_->isValid(state_midd))&& collision_pose.count(c) == 0) {
                 idxes_collide.push_back(c);
                 collision_pose[c] = ReloPush::State(wp.x, wp.y, wp.yaw);
+                //continue; // don't double record with isValid()
             }
+
+
+
+            // --- SAME METHOD AS IN RELOPUSH ---
+
+
+
+
+            // if this probe collides—and we haven’t recorded c yet—
+//            if (!si_single4all_->isValid(state_midd)
+//                && collision_pose.count(c) == 0)
+//            {
+//                idxes_collide.push_back(c);
+//                collision_pose[c] = ReloPush::State(wp.x, wp.y, wp.yaw);
+//            }
         }
     }
 
@@ -1339,14 +1363,9 @@ bool Planner::processObject(int o,
 
 
 
-
-
         /////////////
         //env_.freeParamSingleForAll();
         //return false;
-
-
-
 
 
 
@@ -1368,13 +1387,6 @@ bool Planner::processObject(int o,
               }
               return false;
           }
-
-
-
-
-
-
-
 
 
           // ReloPush::State obj_app = ReloPush::find_pre_push(bestDubins.startState,prepush_th);

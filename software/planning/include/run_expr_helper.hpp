@@ -150,6 +150,7 @@ static void rematchBlueboxInit(ompl::base::State *state_init,
 // 5) choose & run planner
 static void runChosenPlanner(const std::string &plannerName,
                              Planner &planner,
+                             Planner::plRS_MODE mode,
                              ompl::base::State *si,
                              ompl::base::State *sg,
                              og::PathGeometric &path,
@@ -165,7 +166,7 @@ static void runChosenPlanner(const std::string &plannerName,
     else if (plannerName == "plrs")
     {
         //planner.plan_plrs_jeeho_brute(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
-        planner.plan_plrs_jeeho_random(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
+        planner.plan_plrs_jeeho(mode, si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
     }
     else if (plannerName == "kino")
     {
@@ -258,6 +259,7 @@ allocateAndLoad(RobotObjectSetup *env,
 // Run planning for each object‐count in 'ns'
 //------------------------------------------------------------------------------
 static void runObjectLoop(
+    const Planner::plRS_MODE mode,
     int instance, int id,
     const std::vector<int> &ns,
     const std::string &dp_root,
@@ -322,6 +324,7 @@ static void runObjectLoop(
         runChosenPlanner(
             name_planner,
             planner,
+            mode,
             state_init, state_goal,
             path, actions, num_cleared,
             do_merge, use_rrt);
@@ -341,11 +344,14 @@ static void runObjectLoop(
         std::cout << "Result path length: "
                   << path.length() << std::endl;
 
-
-
         // Print summary
-        double total_path_length = 0.0;
-        double action1_length = 0.0;
+        double total_length = 0.0;
+        double transfer_length = 0.0;
+        double transit_length = 0.0;
+
+        planner.calc_lengths(actions,total_length,transfer_length,transit_length,Constants::prepush_th);
+
+        /*
         for (size_t i = 1; i < actions.size(); ++i) {
             // Compute distance between consecutive actions
             double dx = actions[i].x - actions[i-1].x;
@@ -358,12 +364,13 @@ static void runObjectLoop(
                 action1_length += segment_length;
             }
         }
+        */
 
         int total_num_cleared = std::accumulate(num_cleared.begin(),num_cleared.end(),0);
 
         std::cout << "\n\t---------- Results ----------" << std::endl;
-        std::cout << "Total path length: " << total_path_length << std::endl;
-        std::cout << "Path length for action type 1: " << action1_length << std::endl;
+        std::cout << "Total path length: " << total_length << std::endl;
+        std::cout << "Path length for action type 1: " << transfer_length << std::endl;
         std::cout << "Planning Time: " << elapsed << std::endl;
 
 
@@ -376,8 +383,8 @@ static void runObjectLoop(
         fout_stat << "===\n";
         fout_stat << "index:" << instance << "\n";
         fout_stat << "planning_time(s):" << elapsed << "\n";
-        fout_stat << "total_length(m):" << total_path_length << "\n";
-        fout_stat << "transfer_length(m):" << action1_length << "\n";
+        fout_stat << "total_length(m):" << total_length << "\n";
+        fout_stat << "transfer_length(m):" << transfer_length << "\n";
         //fout_stat << "number_of_cleared:" << total_num_cleared << "\n";
 
         fout_stat.close();

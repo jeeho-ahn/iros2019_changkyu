@@ -129,6 +129,7 @@ target_link_libraries(${PROJECT_NAME}
 target_link_libraries(run_expr
   ${PROJECT_NAME}
   ${Boost_LIBRARIES}
+  ${Eigen_LIBRARIES}
   yaml-cpp
 )
 

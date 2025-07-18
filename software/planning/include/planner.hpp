@@ -43,6 +43,32 @@ public:
         double yaw;
     };
 
+    enum plRS_MODE
+    {
+        BRUTE_FORCE=0,
+        RANDOM,
+        GREEDY
+    };
+
+    std::string getModeStr(plRS_MODE mode) {
+        std::string out_str;
+        switch (mode) {
+            case BRUTE_FORCE:
+                out_str = "BRUTE_FORCE";
+                break;
+            case RANDOM:
+                out_str = "RANDOM";
+                break;
+            case GREEDY:
+                out_str = "GREEDY";
+                break;
+            default:
+                std::cout << "Unknown mode" << std::endl;
+                break;
+        }
+        return out_str;
+    }
+
     void UseKino()
     {
         use_kino = true;
@@ -69,19 +95,21 @@ public:
                     ompl::geometric::PathGeometric &path_res,
                     std::vector<Action> &actions_res );
 
-    bool plan_plrs_jeeho_brute(const ob::State* start,
-                                  const ob::State* goal,
-                                  og::PathGeometric &path_res,
-                                  std::vector<Action> &actions_res,
-                                std::vector<int> &num_cleared,
-                                  const bool use_rrt = false);
-
+    bool plan_plrs_jeeho(   const plRS_MODE mode,
+                            const ob::State* start,
+                            const ob::State* goal,
+                            og::PathGeometric &path_res,
+                            std::vector<Action> &actions_res,
+                            std::vector<int> &num_cleared,
+                            const bool use_rrt = false);
+/*
     bool plan_plrs_jeeho_random(const ob::State* start,
                                   const ob::State* goal,
                                   og::PathGeometric &path_res,
                                   std::vector<Action> &actions_res,
                                 std::vector<int> &num_cleared,
                                   const bool use_rrt = false);
+                                  */
 
 
 /*
@@ -147,6 +175,13 @@ public:
                            const ompl::base::State* state_goal,
                            const ompl::geometric::PathGeometric &path,
                            const std::vector<Action> &actions          );
+
+     void calc_lengths(
+        const std::vector<Action>& actions,
+        double& total_length,
+        double& transfer_length,
+        double& transit_length,
+        double shift_dist = 0.49094);
 
     void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path, bool is_relopush = false);
     void visualizePath(cv::Mat& img, const ompl::geometric::PathGeometric &path, double minx, double maxx, double miny, double maxy, bool is_relopush = true);
@@ -371,6 +406,8 @@ private:
                              ob::State *state_curr,
                              og::PathGeometric &path_tmp,
                              double pre_push_dist);
+
+
 
     RobotObjectSetup &env_;
     std::vector<RobotObjectSetup::Object> defs_; // jeeho

@@ -10,7 +10,8 @@
 #include <boost/log/trivial.hpp>
 #define LOG BOOST_LOG_TRIVIAL(trace)
 
-#include "../include/planner.hpp"
+//#include "../include/planner.hpp"
+#include <planner.hpp>
 
 #include <config.h>
 #include <string>
