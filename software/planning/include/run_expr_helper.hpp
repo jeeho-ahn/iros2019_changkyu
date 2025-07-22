@@ -148,7 +148,7 @@ static void rematchBlueboxInit(ompl::base::State *state_init,
 }
 
 // 5) choose & run planner
-static void runChosenPlanner(const std::string &plannerName,
+static Planner::TYPE_RESULT runChosenPlanner(const std::string &plannerName,
                              Planner &planner,
                              Planner::plRS_MODE mode,
                              ompl::base::State *si,
@@ -157,26 +157,30 @@ static void runChosenPlanner(const std::string &plannerName,
                              std::vector<Planner::Action> &actions,
                              std::vector<int>& num_cleared,
                              bool do_merge,
+                             clock_t& start_time,
                              bool use_rrt=false)
 {
-    if (plannerName.rfind("ours", 0) == 0)
-    {
-        planner.plan(si, sg, path, actions, do_merge);
-    }
-    else if (plannerName == "plrs")
+//    if (plannerName.rfind("ours", 0) == 0)
+//    {
+//        planner.plan(si, sg, path, actions, do_merge);
+//    }
+    if (plannerName == "plrs")
     {
         //planner.plan_plrs_jeeho_brute(si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
-        planner.plan_plrs_jeeho(mode, si, sg, path, actions, num_cleared, /*use_rrt*/use_rrt);
+        return planner.plan_plrs_jeeho(mode, si, sg, path, actions, num_cleared, start_time,/*use_rrt*/use_rrt);
     }
-    else if (plannerName == "kino")
-    {
-        planner.UseKino();
-        planner.plan(si, sg, path, actions, true);
-    }
+//    else if (plannerName == "kino")
+//    {
+//        planner.UseKino();
+//        planner.plan(si, sg, path, actions, true);
+//    }
     else
     {
         std::cerr << "[Error] Unknown planner " << plannerName << std::endl;
         std::exit(1);
+
+        //dummy return
+        return Planner::TYPE_RESULT::NO_SOLUTION;
     }
 }
 
@@ -321,13 +325,13 @@ static void runObjectLoop(
         //bool use_rrt = false;
 
         clock_t t0 = clock();
-        runChosenPlanner(
+        auto res = runChosenPlanner(
             name_planner,
             planner,
             mode,
             state_init, state_goal,
             path, actions, num_cleared,
-            do_merge, use_rrt);
+            do_merge, t0, use_rrt);
         double elapsed = double(clock() - t0) / CLOCKS_PER_SEC;
 
         // 7) save + report
@@ -365,6 +369,10 @@ static void runObjectLoop(
             }
         }
         */
+
+        // mark timeout
+        if(res == Planner::TYPE_RESULT::TIMEOUT)
+            total_length = -1.0;
 
         int total_num_cleared = std::accumulate(num_cleared.begin(),num_cleared.end(),0);
 

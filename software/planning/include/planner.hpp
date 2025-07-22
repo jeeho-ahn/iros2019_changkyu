@@ -50,6 +50,13 @@ public:
         GREEDY
     };
 
+    enum TYPE_RESULT
+    {
+        SUCCESS =0,
+        NO_SOLUTION,
+        TIMEOUT
+    };
+
     std::string getModeStr(plRS_MODE mode) {
         std::string out_str;
         switch (mode) {
@@ -95,12 +102,13 @@ public:
                     ompl::geometric::PathGeometric &path_res,
                     std::vector<Action> &actions_res );
 
-    bool plan_plrs_jeeho(   const plRS_MODE mode,
+    TYPE_RESULT plan_plrs_jeeho(   const plRS_MODE mode,
                             const ob::State* start,
                             const ob::State* goal,
                             og::PathGeometric &path_res,
                             std::vector<Action> &actions_res,
                             std::vector<int> &num_cleared,
+                            clock_t &start_time,
                             const bool use_rrt = false);
 /*
     bool plan_plrs_jeeho_random(const ob::State* start,

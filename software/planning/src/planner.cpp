@@ -2059,12 +2059,13 @@ void Planner::plan_plRS( const ompl::base::State *state_start,
     si_single4all_->freeState(state_curr);
 }
 
-bool Planner::plan_plrs_jeeho(const plRS_MODE mode,
+Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
                               const ob::State *start,
                               const ob::State *goal,
                               og::PathGeometric &path_res,
                               std::vector<Action> &actions_res,
                               std::vector<int> &num_cleared,
+                              clock_t &start_time,
                               const bool use_rrt)
 {
     std::cout << "\n===== plan started (plrs_jeeho): " << getModeStr(mode)<< " =====" << std::endl;
@@ -2078,6 +2079,9 @@ bool Planner::plan_plrs_jeeho(const plRS_MODE mode,
     std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
     std::vector<int> done_objs(0);
     num_cleared.clear();
+
+    double time_out_t = 1200; // todo: parse this value
+    bool is_timeout = false;
 
 
     if(mode==plRS_MODE::BRUTE_FORCE)
@@ -2150,20 +2154,25 @@ bool Planner::plan_plrs_jeeho(const plRS_MODE mode,
                 //found = true;
                 break;
             }
+
+            // timeout
+            if((double(clock() - start_time) / CLOCKS_PER_SEC) >  time_out_t)
+            {
+                is_timeout = true;
+                break;
+            }
         }
     }
-
-
-
-
 
 
     si_all4all_->freeState(state_curr);
 
     path_res = best_path;
     // check if the path is empty (failed)
-    if(path_res.getStateCount()==0)
+    if(path_res.getStateCount()==0 && !is_timeout)
         std::cout << "No solution" << std::endl;
+    else if(is_timeout)
+        std::cout << "Time out" << std::endl;
     else
     {
         std::cout << "\nFinished Planning: ";
@@ -2180,7 +2189,16 @@ bool Planner::plan_plrs_jeeho(const plRS_MODE mode,
     //path2Actions(path_res, actions_res);
     path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
 
-    return !path_res.getStateCount() == 0;
+    //return !path_res.getStateCount() == 0;
+    if(is_timeout)
+        return TYPE_RESULT::TIMEOUT;
+
+    // not timeout, no sol
+    if(path_res.getStateCount() == 0)
+        return TYPE_RESULT::NO_SOLUTION;
+
+    return TYPE_RESULT::SUCCESS;
+
 }
 
 
