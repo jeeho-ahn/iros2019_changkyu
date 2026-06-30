@@ -334,19 +334,8 @@ static void runObjectLoop(
             do_merge, t0, use_rrt);
         double elapsed = double(clock() - t0) / CLOCKS_PER_SEC;
 
-        // 7) save + report
-        planner.save_plan(
-            fp_res,
-            name_planner,
-            n_objs,
-            elapsed,
-            -1,
-            state_init,
-            state_goal,
-            path,
-            actions);
-        std::cout << "Result path length: "
-                  << path.length() << std::endl;
+
+
 
         // Print summary
         double total_length = 0.0;
@@ -373,6 +362,21 @@ static void runObjectLoop(
         // mark timeout
         if(res == Planner::TYPE_RESULT::TIMEOUT)
             total_length = -1.0;
+        else {
+            // 7) save + report
+            planner.save_plan(
+                fp_res,
+                name_planner,
+                n_objs,
+                elapsed,
+                -1,
+                state_init,
+                state_goal,
+                path,
+                actions);
+            std::cout << "Result path length: "
+                      << path.length() << std::endl;
+        }
 
         int total_num_cleared = std::accumulate(num_cleared.begin(),num_cleared.end(),0);
 

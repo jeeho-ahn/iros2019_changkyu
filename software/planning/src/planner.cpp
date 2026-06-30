@@ -2074,7 +2074,7 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
     std::vector<int> order_objs(n_objs_);
     std::iota(order_objs.begin(), order_objs.end(), 1);
 
-    ob::State* state_curr = si_all4all_->allocState();
+    //ob::State* state_curr = si_all4all_->allocState();
     og::PathGeometric best_path(si_all4all_);
     std::vector<ReloPush::StatePathPtr> best_transit_paths(0);
     std::vector<int> done_objs(0);
@@ -2089,6 +2089,8 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
 
         // try all permutations until success
         do {
+            ob::State* state_curr = si_all4all_->allocState();
+
             num_cleared.clear();
             si_all4all_->copyState(state_curr, start);
 
@@ -2108,6 +2110,7 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
                 best_transit_paths = transit_paths;
                 break;
             }
+            si_all4all_->freeState(state_curr);
 
            //std::cout << "sardz " << this->env_.get_states_around_zero_size() << std::endl;
 
@@ -2115,27 +2118,35 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
         } while (std::next_permutation(order_objs.begin(), order_objs.end()));
 
     }
-
+/*
     else if(mode==plRS_MODE::RANDOM)
     {
         std::vector<std::vector<int>> all_perms;
 
         // Generate all permutations
         std::vector<int> obj_perm = order_objs;
-        std::sort(obj_perm.begin(), obj_perm.end()); // Ensure starting from the smallest lex order
 
-        do {
-            all_perms.push_back(obj_perm);
-        } while (std::next_permutation(obj_perm.begin(), obj_perm.end()));
+//        std::sort(obj_perm.begin(), obj_perm.end()); // Ensure starting from the smallest lex order
 
-        // Shuffle all permutations randomly
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::shuffle(all_perms.begin(), all_perms.end(), g);
+//        do {
+//            all_perms.push_back(obj_perm);
+//        } while (std::next_permutation(obj_perm.begin(), obj_perm.end()));
+
+//        // Shuffle all permutations randomly
+//        std::random_device rd;
+//        std::mt19937 g(rd());
+//        std::shuffle(all_perms.begin(), all_perms.end(), g);
+
+        std::mt19937 rng(std::random_device{}());
+        std::vector<int> perm = order_objs;
+        std::shuffle(perm.begin(), perm.end(), rng);
 
        // bool found = false; // Track if planning succeeded
 
-        for (const auto& perm : all_perms) {
+        //for (const auto& perm : all_perms) {
+        do{
+            ob::State* state_curr = si_all4all_->allocState();
+
             num_cleared.clear();
             si_all4all_->copyState(state_curr, start);
 
@@ -2155,17 +2166,302 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
                 break;
             }
 
+            std::cout << "\tchecking time" << double(clock())/CLOCKS_PER_SEC << std::endl;
+
             // timeout
             if((double(clock() - start_time) / CLOCKS_PER_SEC) >  time_out_t)
             {
+                std::cout << "t1" << std::endl;
                 is_timeout = true;
                 break;
             }
+
+
+             si_all4all_->freeState(state_curr);
+        } while(std::next_permutation(perm.begin(), perm.end()));
+        std::cout << "t2" << std::endl;
+    }
+    */
+
+    /*
+    else if (mode == plRS_MODE::RANDOM)
+    {
+        // We'll iterate permutations in-place using Heap's algorithm (iterative).
+        // Start from your current order (no need to sort).
+        std::vector<int> perm = order_objs;
+        const int n = static_cast<int>(perm.size());
+
+        // Optional: shuffle starting permutation to randomize traversal
+        {
+            std::mt19937 rng(std::random_device{}());
+            std::shuffle(perm.begin(), perm.end(), rng);
+        }
+
+        // Heap's algorithm state
+        std::vector<int> c(n, 0);
+        int i = 0;
+
+        bool found = false;
+
+        // Reuse a single state allocation
+        ob::State* state_curr = si_all4all_->allocState();
+
+        // Helper to try current permutation and check timeout
+        auto try_current_perm = [&]() -> bool {
+            // timeout check
+            if ((double(clock() - start_time) / CLOCKS_PER_SEC) > time_out_t) {
+                std::cout << "t1" << std::endl;
+                is_timeout = true;
+                return true; // signal to stop
+            }
+
+            num_cleared.clear();
+            si_all4all_->copyState(state_curr, start);
+
+            og::PathGeometric path_tmp(si_all4all_);
+            std::vector<ReloPush::StatePathPtr> transit_paths;
+            transit_paths.clear();
+
+            if (planSequence(perm, start, goal,
+                             state_curr, path_tmp,
+                             done_objs, num_cleared,
+                             transit_paths, use_rrt))
+            {
+                best_path = path_tmp;
+                best_transit_paths = transit_paths;
+                found = true;
+                return true; // stop; we found a plan
+            }
+
+            return false; // continue
+        };
+
+        // Try the initial permutation
+        if (try_current_perm()) {
+            si_all4all_->freeState(state_curr);
+            std::cout << "t2" << std::endl;
+            // fall through to end; t3 will print
+        } else {
+            // Generate each next permutation on-the-fly
+            while (i < n) {
+                if (c[i] < i) {
+                    if ((i & 1) == 0) {
+                        std::swap(perm[0], perm[i]);
+                    } else {
+                        std::swap(perm[c[i]], perm[i]);
+                    }
+
+                    c[i] += 1;
+                    i = 0;
+
+                    // Try this permutation
+                    if (try_current_perm()) break;
+
+                    // (Optional) periodic time log to avoid spamming
+                    // static int step = 0; if ((++step % 50) == 0) {
+                    //     std::cout << "\tchecking time" << double(clock())/CLOCKS_PER_SEC << std::endl;
+                    // }
+
+                } else {
+                    c[i] = 0;
+                    i += 1;
+                }
+            }
+
+            si_all4all_->freeState(state_curr);
+            std::cout << "t2" << std::endl;
+        }
+    }
+    */
+    /*
+    else if (mode == plRS_MODE::RANDOM) //Lehmer code
+    {
+        std::mt19937 rng(std::random_device{}());
+        const int max_trials = 200000; // cap how many unique permutations you’ll try this run
+
+        // ---- Precompute mapping to 0..n-1 (handles labels not equal to 1..n) ----
+        std::vector<int> base = order_objs;
+        std::vector<int> sorted = base;
+        std::sort(sorted.begin(), sorted.end());
+        // value -> rank map
+        std::unordered_map<int,int> val2rank;
+        val2rank.reserve(sorted.size()*2);
+        for (int i = 0; i < (int)sorted.size(); ++i) val2rank[sorted[i]] = i;
+
+        // ---- Precompute factorials for Lehmer code (up to n) ----
+        const int n = (int)order_objs.size();
+        std::vector<uint64_t> fact(n+1, 1);
+        for (int i = 2; i <= n; ++i) fact[i] = fact[i-1] * (uint64_t)i;
+        // (Guard: if n > 20, 64-bit rank will overflow; for >20, switch to a hash-based fingerprint.)
+
+        // ---- Helper: compute Lehmer rank of a permutation of base labels ----
+        auto lehmer_rank = [&](const std::vector<int>& perm) -> uint64_t {
+            // O(n^2) version (fine for n <= ~15). Tracks which ranks are already used.
+            std::vector<char> used(n, 0);
+            uint64_t rank = 0;
+            for (int i = 0; i < n; ++i) {
+                int r = val2rank.at(perm[i]); // rank of current value in sorted[]
+                int smaller_unused = 0;
+                for (int k = 0; k < r; ++k) if (!used[k]) ++smaller_unused;
+                rank += (uint64_t)smaller_unused * fact[n - 1 - i];
+                used[r] = 1;
+            }
+            return rank;
+        };
+
+        // ---- Seen set of tried permutations (no repeats) ----
+        std::unordered_set<uint64_t> seen;
+        seen.reserve(std::min<uint64_t>(max_trials*2ULL, 1ULL<<20)); // reserve some space
+
+        bool found = false;
+        ob::State* state_curr = si_all4all_->allocState();
+
+        int attempts = 0;
+        std::vector<int> perm; perm.reserve(n);
+
+        while (attempts < max_trials) {
+            // timeout check
+            if ((double(clock() - start_time) / CLOCKS_PER_SEC) > time_out_t) {
+                std::cout << "t1" << std::endl;
+                is_timeout = true;
+                break;
+            }
+
+            // make a random permutation (sampling without replacement)
+            perm = base;
+            std::shuffle(perm.begin(), perm.end(), rng);
+
+            // compute unique ID; skip if seen
+            uint64_t id = lehmer_rank(perm);
+            if (!seen.insert(id).second) {
+                // already tried this ordering; try another without counting toward max_trials
+                continue;
+            }
+
+            // try this permutation
+            num_cleared.clear();
+            si_all4all_->copyState(state_curr, start);
+
+            og::PathGeometric path_tmp(si_all4all_);
+            std::vector<ReloPush::StatePathPtr> transit_paths;
+
+            if (planSequence(perm, start, goal,
+                             state_curr, path_tmp,
+                             done_objs, num_cleared,
+                             transit_paths, use_rrt))
+            {
+                best_path = path_tmp;
+                best_transit_paths = transit_paths;
+                found = true;
+                break;
+            }
+
+            ++attempts;
+            if ((attempts % 50) == 0) {
+                std::cout << "\tchecking time" << double(clock())/CLOCKS_PER_SEC << std::endl;
+            }
+        }
+
+        si_all4all_->freeState(state_curr);
+        std::cout << "t2" << std::endl;
+    }
+    */
+    else if (mode == plRS_MODE::RANDOM)
+    {
+        const int n = static_cast<int>(order_objs.size());
+        if (n == 0) {
+            std::cout << "t2" << std::endl;
+            // fall through; t3 will print
+        } else {
+            // ---- Map labels to 0..n-1 ranks (handles labels not equal to 1..n) ----
+            std::vector<int> base = order_objs;
+            std::vector<int> sorted = base;
+            std::sort(sorted.begin(), sorted.end());
+
+            std::unordered_map<int,int> val2rank;
+            val2rank.reserve(sorted.size()*2);
+            for (int i = 0; i < n; ++i) val2rank[sorted[i]] = i;
+
+            // ---- Zobrist table: position x symbol_rank -> 64-bit random ----
+            std::mt19937_64 rng64(std::random_device{}());
+            std::vector<std::vector<uint64_t>> zob(n, std::vector<uint64_t>(n));
+            for (int i = 0; i < n; ++i) {
+                for (int r = 0; r < n; ++r) zob[i][r] = rng64();
+            }
+
+            // ---- Helper: compute Zobrist hash of current permutation ----
+            auto zobrist_hash = [&](const std::vector<int>& perm) -> uint64_t {
+                uint64_t h = 0;
+                for (int i = 0; i < n; ++i) {
+                    const int r = val2rank[perm[i]];
+                    h ^= zob[i][r];
+                }
+                return h;
+            };
+
+            std::mt19937 rng(std::random_device{}());
+            const int max_trials = 200000; // cap unique permutations we’ll try
+            std::unordered_set<uint64_t> seen;
+            seen.reserve(max_trials * 2);
+
+            bool found = false;
+
+            // Reuse a single allocation to avoid churn
+            ob::State* state_curr = si_all4all_->allocState();
+
+            int attempts = 0;
+            std::vector<int> perm; perm.reserve(n);
+
+            while (attempts < max_trials) {
+                // Timeout check
+                if ((double(clock() - start_time) / CLOCKS_PER_SEC) > time_out_t) {
+                    std::cout << "t1" << std::endl;
+                    is_timeout = true;
+                    break;
+                }
+
+                // Sample a random permutation
+                perm = base;
+                std::shuffle(perm.begin(), perm.end(), rng);
+
+                // Deduplicate via Zobrist
+                uint64_t key = zobrist_hash(perm);
+                if (!seen.insert(key).second) {
+                    // already tried; pick another without counting toward attempts
+                    continue;
+                }
+
+                // Try this order
+                num_cleared.clear();
+                si_all4all_->copyState(state_curr, start);
+
+                og::PathGeometric path_tmp(si_all4all_);
+                std::vector<ReloPush::StatePathPtr> transit_paths;
+
+                if (planSequence(perm, start, goal,
+                                 state_curr, path_tmp,
+                                 done_objs, num_cleared,
+                                 transit_paths, use_rrt))
+                {
+                    best_path = path_tmp;
+                    best_transit_paths = transit_paths;
+                    found = true;
+                    break;
+                }
+
+                ++attempts;
+                if ((attempts % 50) == 0) {
+                    std::cout << "\tchecking time" << double(clock())/CLOCKS_PER_SEC << std::endl;
+                }
+            }
+
+            si_all4all_->freeState(state_curr);
+            std::cout << "t2" << std::endl;
         }
     }
 
+    std::cout << "t3" << std::endl;
 
-    si_all4all_->freeState(state_curr);
 
     path_res = best_path;
     // check if the path is empty (failed)
@@ -2185,6 +2481,7 @@ Planner::TYPE_RESULT Planner::plan_plrs_jeeho(const plRS_MODE mode,
 
         std::cout << "done" << std::endl;
     }
+    std::cout << "t4" << std::endl;
     
     //path2Actions(path_res, actions_res);
     path2ActionsWithTransitPaths(path_res,best_transit_paths,actions_res);
